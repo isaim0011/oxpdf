@@ -7,8 +7,27 @@ on:
     branches: [ main, master ]
 
 jobs:
+  fmt:
+    name: Auto-Format & Lint Fix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Format Rust Code
+        run: cargo fmt --all
+      - name: Commit formatted code if needed
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style(rustfmt): auto-format codebase via CI"
+          branch: ${{ github.head_ref || github.ref_name }}
+
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})
+    needs: fmt
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -20,9 +39,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-          components: clippy, rustfmt
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+          components: clippy
       - name: Clippy check
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Run Tests
@@ -30,6 +47,7 @@ jobs:
 
   wasm:
     name: Check WebAssembly (WASM32)
+    needs: fmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

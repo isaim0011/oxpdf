@@ -134,22 +134,43 @@ impl XRefTable {
                     for _ in 0..num_entries {
                         let offset = match lexer.next_token()? {
                             Some(Token::Integer(val)) => val as u64,
-                            _ => return Err(Error::SyntaxError { offset: lexer.cursor(), message: "Corrupt xref offset" }),
+                            _ => {
+                                return Err(Error::SyntaxError {
+                                    offset: lexer.cursor(),
+                                    message: "Corrupt xref offset",
+                                })
+                            }
                         };
                         let gen = match lexer.next_token()? {
                             Some(Token::Integer(val)) => val as u16,
-                            _ => return Err(Error::SyntaxError { offset: lexer.cursor(), message: "Corrupt xref generation" }),
+                            _ => {
+                                return Err(Error::SyntaxError {
+                                    offset: lexer.cursor(),
+                                    message: "Corrupt xref generation",
+                                })
+                            }
                         };
                         let flag = match lexer.next_token()? {
                             Some(Token::Keyword("n")) => true,
                             Some(Token::Keyword("f")) => false,
-                            _ => return Err(Error::SyntaxError { offset: lexer.cursor(), message: "Corrupt xref flag" }),
+                            _ => {
+                                return Err(Error::SyntaxError {
+                                    offset: lexer.cursor(),
+                                    message: "Corrupt xref flag",
+                                })
+                            }
                         };
 
                         if flag {
                             table.insert(current_id, XRefEntry::InUse { offset, gen });
                         } else {
-                            table.insert(current_id, XRefEntry::Free { next_free_id: offset as u32, gen });
+                            table.insert(
+                                current_id,
+                                XRefEntry::Free {
+                                    next_free_id: offset as u32,
+                                    gen,
+                                },
+                            );
                         }
                         current_id += 1;
                     }
@@ -177,13 +198,18 @@ impl XRefTable {
             }
 
             if tokens.len() >= 2 {
-                if let (Token::Integer(id), Token::Integer(gen)) = (&tokens[tokens.len() - 2], &tokens[tokens.len() - 1]) {
+                if let (Token::Integer(id), Token::Integer(gen)) =
+                    (&tokens[tokens.len() - 2], &tokens[tokens.len() - 1])
+                {
                     if *id > 0 && *gen >= 0 {
                         // Compute true byte offset of start of `<id>`
-                        table.insert(*id as u32, XRefEntry::InUse {
-                            offset: lookback_start as u64,
-                            gen: *gen as u16,
-                        });
+                        table.insert(
+                            *id as u32,
+                            XRefEntry::InUse {
+                                offset: lookback_start as u64,
+                                gen: *gen as u16,
+                            },
+                        );
                     }
                 }
             }
