@@ -148,10 +148,7 @@ mod tests {
     #[test]
     fn test_recursion_limit() {
         // Construct deeply nested array: [[[[...
-        let mut input = Vec::new();
-        for _ in 0..300 {
-            input.push(b'[');
-        }
+        let input = vec![b'['; 300];
         let mut parser = Parser::new(&input).with_max_depth(50);
         let result = parser.parse_object();
         assert!(matches!(result, Err(Error::RecursionLimitExceeded(50))));
