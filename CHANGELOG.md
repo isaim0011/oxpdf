@@ -12,5 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Delimiter and whitespace classifier conforming strictly to ISO 32000-1 §7.2.2.
 - Stack-safe Object Parser (`oxpdf::parser::Parser`) with configurable depth bounding to prevent stack-overflow DoS vulnerabilities.
 - SmallVec inline memory optimization for literal strings (`( ... )`) and hexadecimal byte sequences (`< ... >`).
+- Hybrid Cross-Reference table (`oxpdf::xref::XRefTable`) with backwards traversal and PDFium-style resilient forward linear reconstruction scanner for corrupted documents.
+- Lazy Stream view (`oxpdf::stream::StreamView`) with on-demand Flate/Zlib decompression for multi-gigabyte files under constant bounded memory.
+- Monotonic zero-allocation Serializer (`oxpdf::writer::Serializer`) inspired by Typst's `pdf-writer`.
 - Cross-platform CI/CD testing workflow covering Linux, macOS, Windows, and WebAssembly (`wasm32-unknown-unknown`).
 - Professional `oxpdf-maintainer` ecosystem skill for automated quality gating, benchmarking, and releases.
