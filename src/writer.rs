@@ -137,7 +137,10 @@ mod tests {
 
         let mut dict = BTreeMap::new();
         dict.insert(std::borrow::Cow::Borrowed("Type"), Object::name("Catalog"));
-        dict.insert(std::borrow::Cow::Borrowed("Pages"), Object::Reference { id: 2, gen: 0 });
+        dict.insert(
+            std::borrow::Cow::Borrowed("Pages"),
+            Object::Reference { id: 2, gen: 0 },
+        );
         ser.write_object(&Object::Dictionary(dict)).unwrap();
         ser.write_indirect_object_footer().unwrap();
 

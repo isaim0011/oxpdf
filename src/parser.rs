@@ -150,7 +150,10 @@ mod tests {
 
         match obj {
             Object::Dictionary(dict) => {
-                assert_eq!(dict.get("Type"), Some(&Object::Name(std::borrow::Cow::Borrowed("Page"))));
+                assert_eq!(
+                    dict.get("Type"),
+                    Some(&Object::Name(std::borrow::Cow::Borrowed("Page")))
+                );
                 assert_eq!(
                     dict.get("Parent"),
                     Some(&Object::Reference { id: 2, gen: 0 })

@@ -94,7 +94,9 @@ impl<'a> Document<'a> {
                         _ => return Ok(None),
                     };
 
-                    self.obj_stm_cache.borrow_mut().insert(stm_id, (first_offset, decompressed));
+                    self.obj_stm_cache
+                        .borrow_mut()
+                        .insert(stm_id, (first_offset, decompressed));
                 }
 
                 let cache = self.obj_stm_cache.borrow();
@@ -301,18 +303,40 @@ startxref\n\
         let mut doc_bytes = Vec::new();
         doc_bytes.extend_from_slice(b"%PDF-1.5\n");
         let objstm_offset = doc_bytes.len();
-        doc_bytes.extend_from_slice(b"10 0 obj\n<< /Type /ObjStm /N 2 /First 10 /Length 37 >>\nstream\n");
+        doc_bytes.extend_from_slice(
+            b"10 0 obj\n<< /Type /ObjStm /N 2 /First 10 /Length 37 >>\nstream\n",
+        );
         doc_bytes.extend_from_slice(stream_payload);
         doc_bytes.extend_from_slice(b"\nendstream\nendobj\n");
         let xref_offset = doc_bytes.len();
-        doc_bytes.extend_from_slice(b"xref\n0 1\n0000000000 65535 f \r\ntrailer\n<< /Size 11 >>\nstartxref\n");
+        doc_bytes.extend_from_slice(
+            b"xref\n0 1\n0000000000 65535 f \r\ntrailer\n<< /Size 11 >>\nstartxref\n",
+        );
         doc_bytes.extend_from_slice(format!("{}\n%%EOF", xref_offset).as_bytes());
 
         let mut doc = Document::load(&doc_bytes).unwrap();
         // Insert XRef entries: Object 10 is InUse; Object 11 and 12 are Compressed in Object 10
-        doc.xref.insert(10, XRefEntry::InUse { offset: objstm_offset as u64, gen: 0 });
-        doc.xref.insert(11, XRefEntry::Compressed { stream_obj_id: 10, index: 0 });
-        doc.xref.insert(12, XRefEntry::Compressed { stream_obj_id: 10, index: 1 });
+        doc.xref.insert(
+            10,
+            XRefEntry::InUse {
+                offset: objstm_offset as u64,
+                gen: 0,
+            },
+        );
+        doc.xref.insert(
+            11,
+            XRefEntry::Compressed {
+                stream_obj_id: 10,
+                index: 0,
+            },
+        );
+        doc.xref.insert(
+            12,
+            XRefEntry::Compressed {
+                stream_obj_id: 10,
+                index: 1,
+            },
+        );
 
         let obj11 = doc.get_object(11).unwrap().unwrap();
         assert_eq!(obj11, Object::name("FirstObject"));

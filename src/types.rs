@@ -17,7 +17,10 @@ pub enum Object<'a> {
         dict: BTreeMap<Cow<'a, str>, Object<'a>>,
         data: Cow<'a, [u8]>,
     },
-    Reference { id: u32, gen: u16 },
+    Reference {
+        id: u32,
+        gen: u16,
+    },
 }
 
 impl<'a> Object<'a> {
