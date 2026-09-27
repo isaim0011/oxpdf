@@ -70,7 +70,7 @@ impl<'a> Document<'a> {
         ser.write_bytes(s.as_bytes())?;
         ser.write_bytes(b"0000000000 65535 f \r\n")?;
 
-        for (_, &offset) in &new_xref {
+        for &offset in new_xref.values() {
             let entry_line = format!("{:010} 00000 n \r\n", offset);
             ser.write_bytes(entry_line.as_bytes())?;
         }
