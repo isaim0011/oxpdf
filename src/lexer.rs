@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_lexer_primitives() {
-        let input = b"true false null 123 -456 2.71828 /Catalog /Page";
+        let input = b"true false null 123 -456 12.3456 /Catalog /Page";
         let mut lexer = Lexer::new(input);
 
         assert_eq!(lexer.next_token().unwrap(), Some(Token::Boolean(true)));
@@ -318,7 +318,7 @@ mod tests {
         assert_eq!(lexer.next_token().unwrap(), Some(Token::Null));
         assert_eq!(lexer.next_token().unwrap(), Some(Token::Integer(123)));
         assert_eq!(lexer.next_token().unwrap(), Some(Token::Integer(-456)));
-        assert_eq!(lexer.next_token().unwrap(), Some(Token::Real(2.71828)));
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::Real(12.3456)));
         assert_eq!(lexer.next_token().unwrap(), Some(Token::Name("Catalog")));
         assert_eq!(lexer.next_token().unwrap(), Some(Token::Name("Page")));
         assert_eq!(lexer.next_token().unwrap(), None);
