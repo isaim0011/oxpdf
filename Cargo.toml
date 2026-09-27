@@ -1,0 +1,36 @@
+[package]
+name = "oxpdf"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["isaim0011 <https://github.com/isaim0011>"]
+description = "Next-generation, pure-Rust streaming PDF engine: memory-bounded, zero-copy, SIMD-accelerated, and fault-tolerant."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/isaim0011/oxpdf"
+homepage = "https://github.com/isaim0011/oxpdf"
+documentation = "https://docs.rs/oxpdf"
+readme = "README.md"
+keywords = ["pdf", "streaming", "zero-copy", "simd", "parser"]
+categories = ["parser-implementations", "multimedia::encoding", "encoding"]
+
+[dependencies]
+memchr = "2.7"
+flate2 = { version = "1.0", default-features = false, features = ["rust_backend"] }
+thiserror = "2.0"
+log = "0.4"
+smallvec = { version = "1.13", features = ["const_generics", "union"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[features]
+default = ["std"]
+std = []
+simd = []
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
