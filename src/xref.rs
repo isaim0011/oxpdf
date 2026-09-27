@@ -135,8 +135,7 @@ impl XRefTable {
 
             if let Token::Integer(first_id) = tok1 {
                 if let Some(Token::Integer(num_entries)) = lexer.next_token()? {
-                    let mut current_id = first_id as u32;
-                    for _ in 0..num_entries {
+                    for current_id in (first_id as u32)..(first_id as u32 + num_entries as u32) {
                         let offset = match lexer.next_token()? {
                             Some(Token::Integer(val)) => val as u64,
                             _ => {
@@ -177,7 +176,6 @@ impl XRefTable {
                                 },
                             );
                         }
-                        current_id += 1;
                     }
                 }
             }

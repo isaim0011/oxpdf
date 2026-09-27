@@ -180,7 +180,7 @@ impl<'a> Lexer<'a> {
                     }
                     b'0'..=b'7' => {
                         // Octal escape up to 3 digits
-                        let mut oct_val = (esc - b'0') as u8;
+                        let mut oct_val = esc - b'0';
                         for _ in 0..2 {
                             if let Some(next) = self.peek_byte(0) {
                                 if (b'0'..=b'7').contains(&next) {
