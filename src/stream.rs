@@ -57,14 +57,18 @@ impl<'a> StreamView<'a> {
                 FilterKind::FlateDecode => {
                     let mut decoder = ZlibDecoder::new(&current[..]);
                     let mut decompressed = Vec::new();
-                    decoder.read_to_end(&mut decompressed).map_err(|e| Error::Io(format!("Flate decompression failed: {e}")))?;
+                    decoder
+                        .read_to_end(&mut decompressed)
+                        .map_err(|e| Error::Io(format!("Flate decompression failed: {e}")))?;
                     current = decompressed;
                 }
                 FilterKind::Identity => {}
-                _ => return Err(Error::SyntaxError {
-                    offset: 0,
-                    message: "Unsupported stream compression filter",
-                }),
+                _ => {
+                    return Err(Error::SyntaxError {
+                        offset: 0,
+                        message: "Unsupported stream compression filter",
+                    })
+                }
             }
         }
 

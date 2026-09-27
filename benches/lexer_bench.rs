@@ -4,7 +4,7 @@ use oxpdf::parser::Parser;
 
 fn benchmark_lexer_throughput(c: &mut Criterion) {
     let mut group = c.benchmark_group("lexer");
-    
+
     // Synthetic PDF snippet with mixed tokens: dictionaries, arrays, numbers, strings
     let sample = b"<< /Type /Pages /Count 3 /Kids [ 3 0 R 4 0 R 5 0 R ] /MediaBox [ 0 0 612 792 ] >> \
                    << /Length 42 /Filter /FlateDecode >> stream \
@@ -25,7 +25,7 @@ fn benchmark_lexer_throughput(c: &mut Criterion) {
 
 fn benchmark_parser_throughput(c: &mut Criterion) {
     let mut group = c.benchmark_group("parser");
-    
+
     let sample = b"<< /Type /Catalog /Pages 2 0 R /Outlines 3 0 R /Metadata [1 2 3 4 5] >>";
 
     group.throughput(Throughput::Bytes(sample.len() as u64));
@@ -39,5 +39,9 @@ fn benchmark_parser_throughput(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, benchmark_lexer_throughput, benchmark_parser_throughput);
+criterion_group!(
+    benches,
+    benchmark_lexer_throughput,
+    benchmark_parser_throughput
+);
 criterion_main!(benches);

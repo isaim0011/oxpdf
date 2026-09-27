@@ -12,10 +12,10 @@ pub enum Token<'a> {
     Null,
     String(SmallVec<[u8; 32]>),
     HexString(SmallVec<[u8; 32]>),
-    DictOpen,        // <<
-    DictClose,       // >>
-    ArrayOpen,       // [
-    ArrayClose,      // ]
+    DictOpen,   // <<
+    DictClose,  // >>
+    ArrayOpen,  // [
+    ArrayClose, // ]
     Comment(&'a [u8]),
 }
 
@@ -131,8 +131,10 @@ impl<'a> Lexer<'a> {
             self.pos += 1;
         }
         let raw = &self.data[start..self.pos];
-        let name_str = std::str::from_utf8(raw)
-            .map_err(|_| Error::SyntaxError { offset: start, message: "Invalid UTF-8 name token" })?;
+        let name_str = std::str::from_utf8(raw).map_err(|_| Error::SyntaxError {
+            offset: start,
+            message: "Invalid UTF-8 name token",
+        })?;
         Ok(Token::Name(name_str))
     }
 
@@ -283,8 +285,21 @@ impl<'a> Lexer<'a> {
     fn is_delimiter_or_ws(b: u8) -> bool {
         matches!(
             b,
-            0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20 |
-            b'(' | b')' | b'<' | b'>' | b'[' | b']' | b'{' | b'}' | b'/' | b'%'
+            0x00 | 0x09
+                | 0x0A
+                | 0x0C
+                | 0x0D
+                | 0x20
+                | b'('
+                | b')'
+                | b'<'
+                | b'>'
+                | b'['
+                | b']'
+                | b'{'
+                | b'}'
+                | b'/'
+                | b'%'
         )
     }
 }

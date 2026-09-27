@@ -48,7 +48,12 @@ impl<W: Write> Serializer<W> {
                 }
             }
             Object::Integer(i) => self.write_bytes(i.to_string().as_bytes()),
-            Object::Real(f) => self.write_bytes(format!("{:.5}", f).trim_end_matches('0').trim_end_matches('.').as_bytes()),
+            Object::Real(f) => self.write_bytes(
+                format!("{:.5}", f)
+                    .trim_end_matches('0')
+                    .trim_end_matches('.')
+                    .as_bytes(),
+            ),
             Object::Name(n) => {
                 self.write_bytes(b"/")?;
                 self.write_bytes(n.as_bytes())
@@ -95,7 +100,9 @@ impl<W: Write> Serializer<W> {
     }
 
     pub fn write_bytes(&mut self, bytes: &[u8]) -> Result<()> {
-        self.writer.write_all(bytes).map_err(|e| Error::Io(e.to_string()))?;
+        self.writer
+            .write_all(bytes)
+            .map_err(|e| Error::Io(e.to_string()))?;
         self.bytes_written += bytes.len() as u64;
         Ok(())
     }

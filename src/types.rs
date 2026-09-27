@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
 use smallvec::SmallVec;
+use std::collections::BTreeMap;
 
 /// Borrowed or lightweight PDF Object model optimized for zero-copy inspection.
 #[derive(Debug, Clone, PartialEq)]

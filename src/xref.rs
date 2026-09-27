@@ -62,7 +62,12 @@ impl XRefTable {
 
             match lexer.next_token()? {
                 Some(Token::Keyword("xref")) => {
-                    let next_prev = Self::parse_xref_subsections(&mut lexer, &mut table, data, current_offset as usize)?;
+                    let next_prev = Self::parse_xref_subsections(
+                        &mut lexer,
+                        &mut table,
+                        data,
+                        current_offset as usize,
+                    )?;
                     match next_prev {
                         Some(prev) => current_offset = prev,
                         None => break,

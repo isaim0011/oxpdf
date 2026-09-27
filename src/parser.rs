@@ -88,12 +88,12 @@ impl<'a> Parser<'a> {
                     match self.lexer.next_token()? {
                         Some(Token::DictClose) => break,
                         Some(Token::Name(key)) => {
-                            let val = self.parse_object_depth(depth + 1)?.ok_or(
-                                Error::SyntaxError {
-                                    offset: self.lexer.cursor(),
-                                    message: "Missing value for dictionary key",
-                                },
-                            )?;
+                            let val =
+                                self.parse_object_depth(depth + 1)?
+                                    .ok_or(Error::SyntaxError {
+                                        offset: self.lexer.cursor(),
+                                        message: "Missing value for dictionary key",
+                                    })?;
                             dict.insert(key, val);
                         }
                         Some(_) => {
