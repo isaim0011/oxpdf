@@ -21,6 +21,10 @@ impl<'a> Parser<'a> {
         self
     }
 
+    pub fn lexer_mut(&mut self) -> &mut Lexer<'a> {
+        &mut self.lexer
+    }
+
     /// Parses the next PDF object safely with bounded recursion depth.
     pub fn parse_object(&mut self) -> Result<Option<Object<'a>>> {
         self.parse_object_depth(0)

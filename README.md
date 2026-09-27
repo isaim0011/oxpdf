@@ -5,22 +5,21 @@
 [![CI](https://github.com/isaim0011/oxpdf/actions/workflows/ci.yml/badge.svg)](https://github.com/isaim0011/oxpdf/actions)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 
-**`oxpdf`** is a next-generation, pure-Rust streaming PDF engine engineered from scratch for extreme throughput, zero-copy parsing, SIMD acceleration, and bounded-memory multi-gigabyte document processing.
+**`oxpdf`** is a high-throughput, pure-Rust streaming PDF engine engineered from scratch for zero-copy tokenization, bounded-memory random lookups, and fault-tolerant xref reconstruction.
 
 ---
 
-## 🎯 Architectural Mission & Pillars
+## 🎯 Architectural Status & Honest Reality
 
-1. **🚀 Zero-Copy Streaming Lexer**:
-   Tokens borrow directly from memory-mapped slices or windowed buffers. Zero allocations for numeric tokens, keywords, and identifiers.
-2. **🛡️ Memory Bounded Processing (<32MB RAM)**:
-   Parse and inspect 500MB to 10GB+ PDF documents in bounded memory without loading full object trees into RAM.
-3. **💥 Fault-Tolerant Reconstruction (Chromium PDFium style)**:
-   Resilient against broken `/Prev` pointers, corrupt cross-reference streams, shifted offsets, and malformed trailer dictionaries.
-4. **🔒 Stack-Safe Recursion Immunity**:
-   Non-recursive loop-based object traversal immune to stack-overflow DoS attacks on deeply nested arrays or cyclic dictionaries.
-5. **🌐 Cross-Platform & WASM32 Native**:
-   First-class support for Linux, macOS, Windows, and WebAssembly (`wasm32-unknown-unknown` / OPFS environments).
+| Pillar | Status | Implemented Reality |
+|---|:---:|---|
+| **🚀 Zero-Copy Streaming Lexer** | **[x] Shipped** | Borrows tokens directly off `&[u8]`; `SmallVec` inline allocations for strings; `memchr`-accelerated. |
+| **🛡️ Memory-Bounded Processing** | **[x] Shipped** | `Document::load` builds xref indexes without materializing the object tree; on-demand random object lookups. |
+| **💥 Fault-Tolerant Reconstruction** | **[x] Shipped** | Standard backward `startxref` resolver + Chromium PDFium-style forward linear fallback scanner for broken trailers and shifted offsets. |
+| **🔒 Stack-Safe Recursion Immunity** | **[x] Shipped** | Loop-guarded worklist page tree flattening with visited set cycle detection; depth-bounded parser preventing stack-overflow DoS (`lopdf#502`). |
+| **🌐 Cross-Platform & WASM32** | **[x] Shipped** | Tested across Linux, macOS, Windows (stable + beta), and WebAssembly (`wasm32-unknown-unknown`). |
+
+*See [ROADMAP.md](ROADMAP.md) for full engineering milestones (Object Streams `/ObjStm`, content stream operator parser, and test corpora).*
 
 ---
 
@@ -30,12 +29,31 @@ Add `oxpdf` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-oxpdf = "0.1.0"
+oxpdf = "0.2.0"
 ```
 
 ---
 
-## 🛠️ Quick Example: Streaming Lexer
+## 🛠️ Usage Examples
+
+### 1. Opening a Document & Inspecting Pages
+
+```rust
+use oxpdf::Document;
+
+let pdf_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n...";
+let doc = Document::load(pdf_bytes)?;
+
+println!("Total objects in index: {}", doc.object_count());
+println!("Total pages: {}", doc.page_count()?);
+
+let page_ids = doc.get_page_ids()?;
+for (idx, page_id) in page_ids.iter().enumerate() {
+    println!("Page #{}: Object ID {}", idx + 1, page_id);
+}
+```
+
+### 2. Zero-Copy Streaming Lexer
 
 ```rust
 use oxpdf::lexer::{Lexer, Token};
@@ -70,5 +88,3 @@ cargo bench
 Licensed under either of:
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
 - MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.

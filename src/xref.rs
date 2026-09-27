@@ -111,7 +111,7 @@ impl XRefTable {
         lexer: &mut Lexer<'_>,
         table: &mut XRefTable,
         data: &[u8],
-        _base_offset: usize,
+        base_offset: usize,
     ) -> Result<Option<u64>> {
         loop {
             let tok1 = match lexer.next_token()? {
@@ -121,9 +121,19 @@ impl XRefTable {
 
             if let Token::Keyword("trailer") = tok1 {
                 // Parse trailer dictionary to extract /Prev and /Root
-                let abs_pos = (data.len() - (data.len() - lexer.cursor())).min(data.len());
+                let abs_pos = base_offset + lexer.cursor();
                 let mut parser = Parser::new(&data[abs_pos..]);
                 if let Ok(Some(Object::Dictionary(dict))) = parser.parse_object() {
+                    let mut trailer_map = BTreeMap::new();
+                    if let Some(Object::Reference { id, .. }) = dict.get("Root") {
+                        trailer_map.insert("Root".to_string(), id.to_string());
+                    }
+                    if let Some(Object::Integer(size)) = dict.get("Size") {
+                        trailer_map.insert("Size".to_string(), size.to_string());
+                    }
+                    if table.trailer_dict.is_none() {
+                        table.trailer_dict = Some(trailer_map);
+                    }
                     if let Some(Object::Integer(prev)) = dict.get("Prev") {
                         if *prev > 0 {
                             return Ok(Some(*prev as u64));

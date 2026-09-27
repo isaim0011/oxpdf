@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crate::lexer::Token;
 use crate::parser::Parser;
 use crate::types::Object;
 use crate::writer::Serializer;
@@ -30,10 +31,21 @@ impl<'a> Document<'a> {
                 }
 
                 let mut parser = Parser::new(&self.data[start..]);
-                // Consume `<id> <gen> obj` header
-                let _id_tok = parser.parse_object()?;
-                let _gen_tok = parser.parse_object()?;
-                // In a PDF file, next is the keyword `obj`, followed by the actual payload object
+                // Consume `<id> <gen> obj` header tokens via lexer
+                let lexer = parser.lexer_mut();
+                let _id_tok = lexer.next_token()?;
+                let _gen_tok = lexer.next_token()?;
+                let obj_tok = lexer.next_token()?;
+                match obj_tok {
+                    Some(Token::Keyword("obj")) => {}
+                    _ => {
+                        return Err(Error::SyntaxError {
+                            offset: start,
+                            message: "Expected 'obj' keyword after object id and generation",
+                        })
+                    }
+                }
+                // Now parse the actual object payload
                 parser.parse_object()
             }
             _ => Ok(None),
@@ -43,6 +55,71 @@ impl<'a> Document<'a> {
     /// Returns the total number of objects in the cross-reference table.
     pub fn object_count(&self) -> usize {
         self.xref.entries.len()
+    }
+
+    /// Finds the Root Catalog dictionary object id.
+    pub fn catalog_id(&self) -> Option<u32> {
+        self.xref
+            .trailer_dict
+            .as_ref()
+            .and_then(|t| t.get("Root"))
+            .and_then(|r| r.parse::<u32>().ok())
+    }
+
+    /// Recursively flattens the page tree (/Pages -> /Kids) using a loop-guarded worklist.
+    pub fn get_page_ids(&self) -> Result<Vec<u32>> {
+        let catalog_id = match self.catalog_id() {
+            Some(id) => id,
+            None => return Ok(Vec::new()),
+        };
+
+        let catalog_obj = match self.get_object(catalog_id)? {
+            Some(Object::Dictionary(d)) => d,
+            _ => return Ok(Vec::new()),
+        };
+
+        let pages_id = match catalog_obj.get("Pages") {
+            Some(Object::Reference { id, .. }) => *id,
+            _ => return Ok(Vec::new()),
+        };
+
+        let mut pages = Vec::new();
+        let mut worklist = vec![pages_id];
+        let mut visited = std::collections::HashSet::new();
+
+        while let Some(current_id) = worklist.pop() {
+            if visited.contains(&current_id) {
+                // Guard against cyclic page trees (Pillar 4)
+                continue;
+            }
+            visited.insert(current_id);
+
+            if let Some(Object::Dictionary(node)) = self.get_object(current_id)? {
+                match node.get("Type") {
+                    Some(Object::Name("Page")) => {
+                        pages.push(current_id);
+                    }
+                    Some(Object::Name("Pages")) => {
+                        if let Some(Object::Array(kids)) = node.get("Kids") {
+                            // Reverse to maintain natural document page order
+                            for kid in kids.iter().rev() {
+                                if let Object::Reference { id, .. } = kid {
+                                    worklist.push(*id);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(pages)
+    }
+
+    /// Returns the resolved page count of the document.
+    pub fn page_count(&self) -> Result<usize> {
+        self.get_page_ids().map(|p| p.len())
     }
 
     /// Linearizes and serializes the document into any writer target with clean xref rebuilding.
@@ -109,5 +186,28 @@ startxref\n\
 
         let doc = Document::load(sample).unwrap();
         assert!(doc.object_count() >= 2);
+    }
+
+    #[test]
+    fn test_document_page_tree_and_cycle_guard() {
+        let sample = b"%PDF-1.4\n\
+1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\
+2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\
+3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\n\
+xref\n\
+0 4\n\
+0000000000 65535 f \r\n\
+0000000009 00000 n \r\n\
+0000000058 00000 n \r\n\
+0000000115 00000 n \r\n\
+trailer\n\
+<< /Size 4 /Root 1 0 R >>\n\
+startxref\n\
+162\n\
+%%EOF";
+
+        let doc = Document::load(sample).unwrap();
+        assert_eq!(doc.page_count().unwrap(), 1);
+        assert_eq!(doc.get_page_ids().unwrap(), vec![3]);
     }
 }
