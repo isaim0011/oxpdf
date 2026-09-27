@@ -96,6 +96,19 @@ impl<W: Write> Serializer<W> {
                 }
                 self.write_bytes(b">>")
             }
+            Object::Stream { dict, data } => {
+                self.write_bytes(b"<<\n")?;
+                for (k, v) in dict {
+                    self.write_bytes(b"/")?;
+                    self.write_bytes(k.as_bytes())?;
+                    self.write_bytes(b" ")?;
+                    self.write_object(v)?;
+                    self.write_bytes(b"\n")?;
+                }
+                self.write_bytes(b">>\nstream\n")?;
+                self.write_bytes(data)?;
+                self.write_bytes(b"\nendstream")
+            }
         }
     }
 
@@ -123,8 +136,8 @@ mod tests {
         assert!(offset > 0);
 
         let mut dict = BTreeMap::new();
-        dict.insert("Type", Object::Name("Catalog"));
-        dict.insert("Pages", Object::Reference { id: 2, gen: 0 });
+        dict.insert(std::borrow::Cow::Borrowed("Type"), Object::name("Catalog"));
+        dict.insert(std::borrow::Cow::Borrowed("Pages"), Object::Reference { id: 2, gen: 0 });
         ser.write_object(&Object::Dictionary(dict)).unwrap();
         ser.write_indirect_object_footer().unwrap();
 

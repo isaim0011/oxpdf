@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-27
+
+### Added
+- PDF 1.5+ Compressed Object Streams (`/Type /ObjStm`) decompression and internal object index resolution with `Document` caching.
+- `Object::Stream` AST variant with zero-copy stream dictionary and lazy payload slice.
+- `Object::into_owned()` and helper methods (`as_name`, `as_dict`, `name`) for seamless static lifecycle handling.
+- Linear stream payload lexer using `memchr::memmem` to find matching `endstream` delimiters without trailing byte corruption.
+
 ## [0.2.0] - 2026-09-27
 
 ### Added

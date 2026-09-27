@@ -11,7 +11,7 @@ A ground-up plan: PDF binary fundamentals → working engine → benchmarked, te
 - [x] Body syntax (indirect objects: `N G obj ... endobj`)
 - [x] Cross-reference table (`xref`) & trailer resolution (`startxref` + `%%EOF`)
 - [x] Incremental updates: `/Prev` chain walking with cycle guards
-- [~] Object streams (`/Type /ObjStm`, PDF 1.5+) — compressed objects packed inside streams
+- [x] Object streams (`/Type /ObjStm`, PDF 1.5+) — compressed objects packed inside streams
 - [~] Filter/encoding pipelines: FlateDecode (implemented), ASCII85/ASCIIHex/RunLength (in progress)
 - [ ] Content-stream mini-language (`BT`, `ET`, `Tj`, `cm`, `Do`, etc.)
 
@@ -27,13 +27,13 @@ A ground-up plan: PDF binary fundamentals → working engine → benchmarked, te
 
 ## Phase 1 — Core Object Model & Parser
 
-- [x] `Object<'a>` enum: `Null, Boolean, Integer, Real, Name, String, Array, Dictionary, Reference`
+- [x] `Object<'a>` enum: `Null, Boolean, Integer, Real, Name, String, Array, Dictionary, Stream, Reference`
 - [x] Depth-bounded recursive-descent parser (`Parser`) immune to recursion DoS (`lopdf#502`)
 - [x] Classic `xref` table backward scanner + trailer parser
 - [x] Fault-tolerant linear fallback scanner (Chromium PDFium style) for broken/shifted offsets
 - [x] Lazy stream views (`StreamView`) with on-demand Flate decompression
-- [ ] Compressed Object Streams (`/ObjStm`) decompression and internal index resolution
-- [~] Document Catalog & Page Tree Walker (`/Root -> /Pages -> /Kids`) with visited-set loop guards
+- [x] Compressed Object Streams (`/ObjStm`) decompression and internal index resolution with caching
+- [x] Document Catalog & Page Tree Walker (`/Root -> /Pages -> /Kids`) with visited-set loop guards
 - [x] Monotonic zero-allocation serializer (`Serializer`) writing clean xref tables
 
 ---

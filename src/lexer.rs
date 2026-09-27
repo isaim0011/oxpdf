@@ -47,6 +47,54 @@ impl<'a> Lexer<'a> {
         self.pos >= self.data.len()
     }
 
+    #[inline]
+    pub fn raw_slice(&self) -> &'a [u8] {
+        self.data
+    }
+
+    /// Reads stream payload after the 'stream' keyword up to 'endstream'.
+    pub fn read_stream_payload(&mut self, explicit_length: Option<usize>) -> Result<&'a [u8]> {
+        // According to ISO 32000-1 §7.3.8.1, the keyword `stream` must be followed by EOL (CR, LF, or CRLF)
+        if self.pos < self.data.len() && self.data[self.pos] == b'\r' {
+            self.pos += 1;
+        }
+        if self.pos < self.data.len() && self.data[self.pos] == b'\n' {
+            self.pos += 1;
+        }
+
+        let start = self.pos;
+
+        if let Some(len) = explicit_length {
+            if start + len <= self.data.len() {
+                let payload = &self.data[start..start + len];
+                self.pos = start + len;
+                // Skip trailing whitespace/newlines before endstream
+                self.skip_whitespace();
+                if let Some(Token::Keyword("endstream")) = self.next_token()? {
+                    return Ok(payload);
+                }
+            }
+        }
+
+        // Fallback or explicit scanning: find 'endstream' token using memchr
+        let finder = memchr::memmem::Finder::new(b"endstream");
+        if let Some(idx) = finder.find(&self.data[start..]) {
+            let mut payload_end = start + idx;
+            // Trim single trailing CRLF if present immediately preceding endstream
+            if payload_end > start && self.data[payload_end - 1] == b'\n' {
+                payload_end -= 1;
+                if payload_end > start && self.data[payload_end - 1] == b'\r' {
+                    payload_end -= 1;
+                }
+            }
+            let payload = &self.data[start..payload_end];
+            self.pos = start + idx + b"endstream".len();
+            Ok(payload)
+        } else {
+            Err(Error::UnexpectedEof(start))
+        }
+    }
+
     /// Fast-skips whitespace characters according to PDF specification ISO 32000-1 §7.2.2.
     #[inline]
     pub fn skip_whitespace(&mut self) {

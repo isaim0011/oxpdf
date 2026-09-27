@@ -59,7 +59,7 @@ impl<'a> Parser<'a> {
                 Ok(Some(Object::Integer(i)))
             }
             Token::Real(f) => Ok(Some(Object::Real(f))),
-            Token::Name(n) => Ok(Some(Object::Name(n))),
+            Token::Name(n) => Ok(Some(Object::Name(std::borrow::Cow::Borrowed(n)))),
             Token::String(s) | Token::HexString(s) => Ok(Some(Object::String(s))),
             Token::ArrayOpen => {
                 let mut arr = Vec::new();
@@ -98,7 +98,7 @@ impl<'a> Parser<'a> {
                                         offset: self.lexer.cursor(),
                                         message: "Missing value for dictionary key",
                                     })?;
-                            dict.insert(key, val);
+                            dict.insert(std::borrow::Cow::Borrowed(key), val);
                         }
                         Some(_) => {
                             self.lexer.seek(checkpoint);
@@ -110,7 +110,25 @@ impl<'a> Parser<'a> {
                         None => return Err(Error::UnexpectedEof(self.lexer.cursor())),
                     }
                 }
-                Ok(Some(Object::Dictionary(dict)))
+                // Check if this dictionary is followed by a `stream` keyword
+                let checkpoint = self.lexer.cursor();
+                match self.lexer.next_token()? {
+                    Some(Token::Keyword("stream")) => {
+                        let explicit_len = dict.get("Length").and_then(|obj| match obj {
+                            Object::Integer(i) if *i >= 0 => Some(*i as usize),
+                            _ => None,
+                        });
+                        let stream_bytes = self.lexer.read_stream_payload(explicit_len)?;
+                        Ok(Some(Object::Stream {
+                            dict,
+                            data: std::borrow::Cow::Borrowed(stream_bytes),
+                        }))
+                    }
+                    _ => {
+                        self.lexer.seek(checkpoint);
+                        Ok(Some(Object::Dictionary(dict)))
+                    }
+                }
             }
             _ => Err(Error::SyntaxError {
                 offset: self.lexer.cursor(),
@@ -132,7 +150,7 @@ mod tests {
 
         match obj {
             Object::Dictionary(dict) => {
-                assert_eq!(dict.get("Type"), Some(&Object::Name("Page")));
+                assert_eq!(dict.get("Type"), Some(&Object::Name(std::borrow::Cow::Borrowed("Page"))));
                 assert_eq!(
                     dict.get("Parent"),
                     Some(&Object::Reference { id: 2, gen: 0 })
@@ -156,5 +174,19 @@ mod tests {
         let mut parser = Parser::new(&input).with_max_depth(50);
         let result = parser.parse_object();
         assert!(matches!(result, Err(Error::RecursionLimitExceeded(50))));
+    }
+
+    #[test]
+    fn test_parse_stream_object() {
+        let input = b"<< /Length 12 >>\nstream\nHello Stream\nendstream";
+        let mut parser = Parser::new(input);
+        let obj = parser.parse_object().unwrap().unwrap();
+        match obj {
+            Object::Stream { dict, data } => {
+                assert_eq!(dict.get("Length"), Some(&Object::Integer(12)));
+                assert_eq!(data.as_ref(), b"Hello Stream");
+            }
+            _ => panic!("Expected Object::Stream"),
+        }
     }
 }
