@@ -1,0 +1,16 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2026-09-27
+
+### Added
+- Zero-copy streaming Lexer (`oxpdf::lexer::Lexer`) borrowing from byte slices with zero heap allocations for numeric tokens, keywords, and identifiers.
+- Delimiter and whitespace classifier conforming strictly to ISO 32000-1 §7.2.2.
+- Stack-safe Object Parser (`oxpdf::parser::Parser`) with configurable depth bounding to prevent stack-overflow DoS vulnerabilities.
+- SmallVec inline memory optimization for literal strings (`( ... )`) and hexadecimal byte sequences (`< ... >`).
+- Cross-platform CI/CD testing workflow covering Linux, macOS, Windows, and WebAssembly (`wasm32-unknown-unknown`).
+- Professional `oxpdf-maintainer` ecosystem skill for automated quality gating, benchmarking, and releases.
