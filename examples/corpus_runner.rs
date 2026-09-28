@@ -19,7 +19,12 @@ fn collect_pdfs<P: AsRef<Path>>(dir: P, files: &mut Vec<PathBuf>) {
             let path = entry.path();
             if path.is_dir() {
                 collect_pdfs(&path, files);
-            } else if path.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("pdf")).unwrap_or(false) {
+            } else if path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s.eq_ignore_ascii_case("pdf"))
+                .unwrap_or(false)
+            {
                 files.push(path);
             }
         }
@@ -70,12 +75,18 @@ fn main() {
 
     let mut summary = CorpusSummary::default();
 
-    println!("{:<45} | {:<8} | {:<7} | {:<7} | {:<10} | {:<12}", "File", "Status", "Objects", "Pages", "Time (ms)", "Peak RSS (KB)");
+    println!(
+        "{:<45} | {:<8} | {:<7} | {:<7} | {:<10} | {:<12}",
+        "File", "Status", "Objects", "Pages", "Time (ms)", "Peak RSS (KB)"
+    );
     println!("{:-<105}", "");
 
     for file in &pdf_files {
         summary.total += 1;
-        let file_name = file.file_name().and_then(|s| s.to_str()).unwrap_or("unknown");
+        let file_name = file
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
         let display_name = if file_name.len() > 42 {
             format!("{}...", &file_name[..39])
         } else {
@@ -86,8 +97,14 @@ fn main() {
             Ok(d) => d,
             Err(e) => {
                 summary.failed += 1;
-                *summary.failures_by_type.entry(format!("ReadError: {}", e)).or_insert(0) += 1;
-                println!("{:<45} | {:<8} | {:<7} | {:<7} | {:<10} | {:<12}", display_name, "FAIL", "-", "-", "-", "-");
+                *summary
+                    .failures_by_type
+                    .entry(format!("ReadError: {}", e))
+                    .or_insert(0) += 1;
+                println!(
+                    "{:<45} | {:<8} | {:<7} | {:<7} | {:<10} | {:<12}",
+                    display_name, "FAIL", "-", "-", "-", "-"
+                );
                 continue;
             }
         };
@@ -103,23 +120,40 @@ fn main() {
                 summary.passed += 1;
                 summary.load_times_ms.push(elapsed_ms);
 
-                println!("{:<45} | {:<8} | {:<7} | {:<7} | {:<10.2} | {:<12}", display_name, "PASS", obj_count, page_count, elapsed_ms, peak_rss);
+                println!(
+                    "{:<45} | {:<8} | {:<7} | {:<7} | {:<10.2} | {:<12}",
+                    display_name, "PASS", obj_count, page_count, elapsed_ms, peak_rss
+                );
             }
             Err(err) => {
                 summary.failed += 1;
                 let err_desc = match &err {
                     oxpdf::Error::UnexpectedEof(offset) => format!("UnexpectedEof({})", offset),
-                    oxpdf::Error::SyntaxError { message, .. } => format!("SyntaxError: {}", message),
+                    oxpdf::Error::SyntaxError { message, .. } => {
+                        format!("SyntaxError: {}", message)
+                    }
                     oxpdf::Error::InvalidNumber(offset) => format!("InvalidNumber({})", offset),
-                    oxpdf::Error::InvalidHexString(offset) => format!("InvalidHexString({})", offset),
-                    oxpdf::Error::UnterminatedString(offset) => format!("UnterminatedString({})", offset),
-                    oxpdf::Error::RecursionLimitExceeded(d) => format!("RecursionLimitExceeded({})", d),
+                    oxpdf::Error::InvalidHexString(offset) => {
+                        format!("InvalidHexString({})", offset)
+                    }
+                    oxpdf::Error::UnterminatedString(offset) => {
+                        format!("UnterminatedString({})", offset)
+                    }
+                    oxpdf::Error::RecursionLimitExceeded(d) => {
+                        format!("RecursionLimitExceeded({})", d)
+                    }
                     oxpdf::Error::Io(s) => format!("Io({})", s),
                     oxpdf::Error::Unsupported(s) => format!("Unsupported: {}", s),
                 };
-                *summary.failures_by_type.entry(err_desc.clone()).or_insert(0) += 1;
+                *summary
+                    .failures_by_type
+                    .entry(err_desc.clone())
+                    .or_insert(0) += 1;
 
-                println!("{:<45} | {:<8} | {:<7} | {:<7} | {:<10} | {:<12}", display_name, "FAIL", "-", "-", "-", "-");
+                println!(
+                    "{:<45} | {:<8} | {:<7} | {:<7} | {:<10} | {:<12}",
+                    display_name, "FAIL", "-", "-", "-", "-"
+                );
             }
         }
     }
@@ -137,9 +171,12 @@ fn main() {
     println!("  Pass rate:           {:.2}%", pass_rate);
 
     if !summary.load_times_ms.is_empty() {
-        summary.load_times_ms.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        summary
+            .load_times_ms
+            .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let p50 = summary.load_times_ms[summary.load_times_ms.len() / 2];
-        let p99_idx = ((summary.load_times_ms.len() as f64 * 0.99).ceil() as usize).saturating_sub(1);
+        let p99_idx =
+            ((summary.load_times_ms.len() as f64 * 0.99).ceil() as usize).saturating_sub(1);
         let p99 = summary.load_times_ms[p99_idx.min(summary.load_times_ms.len() - 1)];
         println!("  Load time p50:       {:.2} ms", p50);
         println!("  Load time p99:       {:.2} ms", p99);

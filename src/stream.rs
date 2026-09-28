@@ -76,9 +76,7 @@ impl<'a> StreamView<'a> {
                     current = decompressed;
                 }
                 FilterKind::Identity => {}
-                _ => {
-                    return Err(Error::Unsupported("unsupported stream filter"))
-                }
+                _ => return Err(Error::Unsupported("unsupported stream filter")),
             }
         }
 

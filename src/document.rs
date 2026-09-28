@@ -172,7 +172,9 @@ impl<'a> Document<'a> {
 
         while let Some(current_id) = worklist.pop() {
             if pages.len() + worklist.len() > MAX_PAGES {
-                return Err(Error::Unsupported("page tree exceeds 10_000_000 node safety limit"));
+                return Err(Error::Unsupported(
+                    "page tree exceeds 10_000_000 node safety limit",
+                ));
             }
             if visited.contains(&current_id) {
                 // Guard against cyclic page trees (Pillar 4)
@@ -251,9 +253,13 @@ impl<'a> Document<'a> {
         // --- Pass 3: pack non-stream objects into one /ObjStm ---
         if !packable_objs.is_empty() {
             // The /ObjStm object itself gets the next available id
-            let objstm_id = new_xref.keys().copied().chain(
-                packable_objs.iter().map(|(id, _)| *id)
-            ).max().unwrap_or(0) + 1;
+            let objstm_id = new_xref
+                .keys()
+                .copied()
+                .chain(packable_objs.iter().map(|(id, _)| *id))
+                .max()
+                .unwrap_or(0)
+                + 1;
 
             // Build the /ObjStm payload:
             //   Header section: "id1 offset1 id2 offset2 ..."
@@ -264,9 +270,7 @@ impl<'a> Document<'a> {
 
             for (idx, (id, obj)) in packable_objs.iter().enumerate() {
                 let body_offset = body_part.len();
-                header_part.extend_from_slice(
-                    format!("{} {} ", id, body_offset).as_bytes()
-                );
+                header_part.extend_from_slice(format!("{} {} ", id, body_offset).as_bytes());
 
                 // Serialize object into body buffer
                 let mut tmp: Vec<u8> = Vec::new();
@@ -288,7 +292,9 @@ impl<'a> Document<'a> {
             let mut compressed: Vec<u8> = Vec::new();
             {
                 let mut encoder = ZlibEncoder::new(&mut compressed, Compression::best());
-                encoder.write_all(&payload).map_err(|e| Error::Io(e.to_string()))?;
+                encoder
+                    .write_all(&payload)
+                    .map_err(|e| Error::Io(e.to_string()))?;
                 encoder.finish().map_err(|e| Error::Io(e.to_string()))?;
             }
 
@@ -297,7 +303,9 @@ impl<'a> Document<'a> {
             let n = packable_objs.len();
             let stm_dict = format!(
                 "<< /Type /ObjStm /N {} /First {} /Filter /FlateDecode /Length {} >>",
-                n, first_offset, compressed.len()
+                n,
+                first_offset,
+                compressed.len()
             );
             ser.write_bytes(stm_dict.as_bytes())?;
             ser.write_bytes(b"\nstream\n")?;
@@ -335,7 +343,8 @@ impl<'a> Document<'a> {
                     if offset == u64::MAX {
                         // Compressed object in the /ObjStm
                         // Find its index
-                        let idx = obj_xref_entries.iter()
+                        let idx = obj_xref_entries
+                            .iter()
                             .find(|(oid, _)| *oid == id)
                             .map(|(_, i)| *i)
                             .unwrap_or(0);
@@ -358,12 +367,17 @@ impl<'a> Document<'a> {
             let mut xref_compressed: Vec<u8> = Vec::new();
             {
                 let mut encoder = ZlibEncoder::new(&mut xref_compressed, Compression::default());
-                encoder.write_all(&xref_data).map_err(|e| Error::Io(e.to_string()))?;
+                encoder
+                    .write_all(&xref_data)
+                    .map_err(|e| Error::Io(e.to_string()))?;
                 encoder.finish().map_err(|e| Error::Io(e.to_string()))?;
             }
 
             // Find the /Root reference
-            let root_str = self.xref.trailer_dict.as_ref()
+            let root_str = self
+                .xref
+                .trailer_dict
+                .as_ref()
                 .and_then(|t| t.get("Root"))
                 .map(|s| s.as_str())
                 .unwrap_or("1");
@@ -392,12 +406,22 @@ impl<'a> Document<'a> {
             let entry_line = format!("{:010} 00000 n \r\n", offset);
             ser.write_bytes(entry_line.as_bytes())?;
         }
-        let root_str = self.xref.trailer_dict.as_ref()
+        let root_str = self
+            .xref
+            .trailer_dict
+            .as_ref()
             .and_then(|t| t.get("Root"))
             .map(|s| s.as_str())
             .unwrap_or("1");
-        ser.write_bytes(format!("trailer\n<< /Size {} /Root {} 0 R >>\nstartxref\n{}\n%%EOF\n",
-            new_xref.len() + 1, root_str, xref_offset).as_bytes())?;
+        ser.write_bytes(
+            format!(
+                "trailer\n<< /Size {} /Root {} 0 R >>\nstartxref\n{}\n%%EOF\n",
+                new_xref.len() + 1,
+                root_str,
+                xref_offset
+            )
+            .as_bytes(),
+        )?;
         Ok(ser.bytes_written())
     }
 

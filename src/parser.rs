@@ -68,7 +68,9 @@ impl<'a> Parser<'a> {
                 const MAX_ARRAY_ELEMENTS: usize = 2_000_000;
                 loop {
                     if arr.len() >= MAX_ARRAY_ELEMENTS {
-                        return Err(Error::Unsupported("array exceeds 2_000_000 element safety limit"));
+                        return Err(Error::Unsupported(
+                            "array exceeds 2_000_000 element safety limit",
+                        ));
                     }
                     let checkpoint = self.lexer.cursor();
                     match self.lexer.next_token()? {
@@ -96,7 +98,9 @@ impl<'a> Parser<'a> {
                 const MAX_DICT_KEYS: usize = 2_000_000;
                 loop {
                     if dict.len() >= MAX_DICT_KEYS {
-                        return Err(Error::Unsupported("dict exceeds 2_000_000 key safety limit"));
+                        return Err(Error::Unsupported(
+                            "dict exceeds 2_000_000 key safety limit",
+                        ));
                     }
                     let checkpoint = self.lexer.cursor();
                     match self.lexer.next_token()? {
