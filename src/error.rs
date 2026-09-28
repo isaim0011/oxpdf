@@ -25,6 +25,9 @@ pub enum Error {
 
     #[error("I/O error: {0}")]
     Io(String),
+
+    #[error("Unsupported feature: {0}")]
+    Unsupported(&'static str),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

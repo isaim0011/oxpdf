@@ -98,7 +98,16 @@ impl<W: Write> Serializer<W> {
             }
             Object::Stream { dict, data } => {
                 self.write_bytes(b"<<\n")?;
+                // Always write correct /Length for the actual data payload
+                let actual_len = data.len();
+                self.write_bytes(b"/Length ")?;
+                self.write_bytes(actual_len.to_string().as_bytes())?;
+                self.write_bytes(b"\n")?;
                 for (k, v) in dict {
+                    if k.as_ref() == "Length" {
+                        // Skip stale /Length from original — we wrote the correct one above
+                        continue;
+                    }
                     self.write_bytes(b"/")?;
                     self.write_bytes(k.as_bytes())?;
                     self.write_bytes(b" ")?;

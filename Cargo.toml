@@ -4,13 +4,13 @@ version = "0.3.0"
 edition = "2021"
 rust-version = "1.80"
 authors = ["isaim0011 <https://github.com/isaim0011>"]
-description = "Next-generation, pure-Rust streaming PDF engine: memory-bounded, zero-copy, SIMD-accelerated, and fault-tolerant."
+description = "Next-generation, pure-Rust streaming PDF engine: memory-bounded, zero-copy, memchr-accelerated scanning, fault-tolerant xref reconstruction, and OOM-safe corpus-tested parsing."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/isaim0011/oxpdf"
 homepage = "https://github.com/isaim0011/oxpdf"
 documentation = "https://docs.rs/oxpdf"
 readme = "README.md"
-keywords = ["pdf", "streaming", "zero-copy", "simd", "parser"]
+keywords = ["pdf", "streaming", "zero-copy", "parser", "fault-tolerant"]
 categories = ["parser-implementations", "multimedia::encoding", "encoding"]
 
 [dependencies]

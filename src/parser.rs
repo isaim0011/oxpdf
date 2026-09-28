@@ -63,7 +63,13 @@ impl<'a> Parser<'a> {
             Token::String(s) | Token::HexString(s) => Ok(Some(Object::String(s))),
             Token::ArrayOpen => {
                 let mut arr = Vec::new();
+                // Safety cap: prevents /Kids array bombs (e.g., 3 billion entries)
+                // that would OOM before we even reach the page tree walker.
+                const MAX_ARRAY_ELEMENTS: usize = 2_000_000;
                 loop {
+                    if arr.len() >= MAX_ARRAY_ELEMENTS {
+                        return Err(Error::Unsupported("array exceeds 2_000_000 element safety limit"));
+                    }
                     let checkpoint = self.lexer.cursor();
                     match self.lexer.next_token()? {
                         Some(Token::ArrayClose) => break,
@@ -87,7 +93,11 @@ impl<'a> Parser<'a> {
             }
             Token::DictOpen => {
                 let mut dict = BTreeMap::new();
+                const MAX_DICT_KEYS: usize = 2_000_000;
                 loop {
+                    if dict.len() >= MAX_DICT_KEYS {
+                        return Err(Error::Unsupported("dict exceeds 2_000_000 key safety limit"));
+                    }
                     let checkpoint = self.lexer.cursor();
                     match self.lexer.next_token()? {
                         Some(Token::DictClose) => break,

@@ -99,7 +99,9 @@ impl XRefTable {
 
         let mut lexer = Lexer::new(&tail[last_match + b"startxref".len()..]);
         match lexer.next_token()? {
-            Some(Token::Integer(offset)) if offset >= 0 => Ok(offset as u64),
+            Some(Token::Integer(offset)) if offset >= 0 && (offset as usize) < data.len() => {
+                Ok(offset as u64)
+            }
             _ => Err(Error::SyntaxError {
                 offset: scan_start + last_match,
                 message: "Invalid or missing byte offset after 'startxref'",
@@ -145,9 +147,21 @@ impl XRefTable {
 
             if let Token::Integer(first_id) = tok1 {
                 if let Some(Token::Integer(num_entries)) = lexer.next_token()? {
-                    for current_id in (first_id as u32)..(first_id as u32 + num_entries as u32) {
+                    // Safety cap: each traditional xref entry is exactly 20 bytes.
+                    // A subsection claiming more entries than the file can physically hold
+                    // (e.g., num_entries = 3_221_225_472 in a malformed PDF) would OOM.
+                    let max_possible = (data.len() / 20).max(1) as i64;
+                    if num_entries < 0 || num_entries > max_possible {
+                        return Err(Error::SyntaxError {
+                            offset: lexer.cursor(),
+                            message: "xref subsection entry count exceeds file size",
+                        });
+                    }
+                    let first = first_id.max(0) as u32;
+                    let count = num_entries as u32;
+                    for current_id in first..(first.saturating_add(count)) {
                         let offset = match lexer.next_token()? {
-                            Some(Token::Integer(val)) => val as u64,
+                            Some(Token::Integer(val)) if val >= 0 => val as u64,
                             _ => {
                                 return Err(Error::SyntaxError {
                                     offset: lexer.cursor(),

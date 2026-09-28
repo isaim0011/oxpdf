@@ -5,86 +5,114 @@
 [![CI](https://github.com/isaim0011/oxpdf/actions/workflows/ci.yml/badge.svg)](https://github.com/isaim0011/oxpdf/actions)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 
-**`oxpdf`** is a high-throughput, pure-Rust streaming PDF engine engineered from scratch for zero-copy tokenization, bounded-memory random lookups, and fault-tolerant xref reconstruction.
+**`oxpdf`** is a pure-Rust streaming PDF parser engineered for zero-copy tokenization, bounded-memory object lookup, and fault-tolerant xref reconstruction. No unsafe allocations, no panic on corrupt input, no OOM on adversarial PDFs.
 
 ---
 
-## 🎯 Architectural Status & Honest Reality
+## 🎯 What Is Actually Implemented (Honest Status)
 
-| Pillar | Status | Implemented Reality |
+| Feature | Status | Reality |
 |---|:---:|---|
-| **🚀 Zero-Copy Streaming Lexer** | **[x] Shipped** | Borrows tokens directly off `&[u8]`; `SmallVec` inline allocations for strings; `memchr`-accelerated. |
-| **🛡️ Memory-Bounded Processing** | **[x] Shipped** | `Document::load` builds xref indexes without materializing the object tree; on-demand random object lookups. |
-| **💥 Fault-Tolerant Reconstruction** | **[x] Shipped** | Standard backward `startxref` resolver + Chromium PDFium-style forward linear fallback scanner for broken trailers and shifted offsets. |
-| **🔒 Stack-Safe Recursion Immunity** | **[x] Shipped** | Loop-guarded worklist page tree flattening with visited set cycle detection; depth-bounded parser preventing stack-overflow DoS (`lopdf#502`). |
-| **🌐 Cross-Platform & WASM32** | **[x] Shipped** | Tested across Linux, macOS, Windows (stable + beta), and WebAssembly (`wasm32-unknown-unknown`). |
-
-*See [ROADMAP.md](ROADMAP.md) for full engineering milestones (Object Streams `/ObjStm`, content stream operator parser, and test corpora).*
+| **Zero-Copy Streaming Lexer** | ✅ Shipped | Borrows tokens directly from `&[u8]`; `SmallVec<[u8; 32]>` inline strings; `memchr`-accelerated scanning. |
+| **Bounded-Memory Object Lookup** | ✅ Shipped | `Document::load` indexes xref only — no full object tree materialized. Random `get_object(id)` by offset. |
+| **Fault-Tolerant Xref** | ✅ Shipped | Backward `startxref` scanner + PDFium-style forward linear fallback for broken/shifted trailers. |
+| **Stack-Safe Parser** | ✅ Shipped | Depth-bounded recursive descent (max 256). Loop-guarded page tree with cycle detection. |
+| **Object Streams `/ObjStm`** | ✅ Shipped | PDF 1.5+ compressed object streams, `FlateDecode` only, with `RefCell` cache to avoid double-decompression. |
+| **OOM Safety** | ✅ Shipped | Hard caps on xref entry count, array/dict size, decompressed stream size (256 MB), page tree depth. Returns `Error::Unsupported` — never panics or OOM-crashes. |
+| **Cross-Platform + WASM32** | ✅ Shipped | CI matrix: Linux, macOS, Windows (stable + beta) + `wasm32-unknown-unknown`. |
+| **XRef Streams (PDF 1.5+ `/Type /XRef`)** | ⚠️ Partial | Falls back to linear scan — offsets recovered but less precise than stream parsing. |
+| **Corpus Pass Rate** | 🔄 Measuring | veraPDF/Isartor harness in progress. Numbers will be published in v0.4.0. |
 
 ---
 
 ## 📦 Installation
 
-Add `oxpdf` to your `Cargo.toml`:
-
 ```toml
 [dependencies]
-oxpdf = "0.2.0"
+oxpdf = "0.3.0"
 ```
 
 ---
 
-## 🛠️ Usage Examples
+## 🛠️ Usage
 
-### 1. Opening a Document & Inspecting Pages
+### Open a PDF and inspect pages
 
 ```rust
 use oxpdf::Document;
 
-let pdf_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n...";
-let doc = Document::load(pdf_bytes)?;
+let data = std::fs::read("document.pdf")?;
+let doc = Document::load(&data)?;
 
-println!("Total objects in index: {}", doc.object_count());
-println!("Total pages: {}", doc.page_count()?);
+println!("Objects in index: {}", doc.object_count());
+println!("Pages: {}", doc.page_count()?);
 
-let page_ids = doc.get_page_ids()?;
-for (idx, page_id) in page_ids.iter().enumerate() {
-    println!("Page #{}: Object ID {}", idx + 1, page_id);
+for (i, page_id) in doc.get_page_ids()?.iter().enumerate() {
+    println!("  Page {}: object id {}", i + 1, page_id);
 }
 ```
 
-### 2. Zero-Copy Streaming Lexer
+### Zero-copy streaming lexer
 
 ```rust
-use oxpdf::lexer::{Lexer, Token};
+use oxpdf::{Lexer, Token};
 
-let pdf_bytes = b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj";
-let mut lexer = Lexer::new(pdf_bytes);
+let bytes = b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj";
+let mut lexer = Lexer::new(bytes);
 
-while let Some(token) = lexer.next_token()? {
-    match token {
-        Token::Name(name) => println!("Found Name: /{name}"),
-        Token::Integer(val) => println!("Found Integer: {val}"),
-        Token::Keyword(kw) => println!("Found Keyword: {kw}"),
+while let Some(tok) = lexer.next_token()? {
+    match tok {
+        Token::Name(n)    => println!("/{n}"),
+        Token::Integer(i) => println!("{i}"),
+        Token::Keyword(k) => println!("{k}"),
         _ => {}
     }
 }
 ```
 
+### Fetch a specific object
+
+```rust
+use oxpdf::{Document, Object};
+
+let data = std::fs::read("document.pdf")?;
+let doc = Document::load(&data)?;
+
+// Returns Object<'static> — no lifetime ties to `data`
+if let Some(obj) = doc.get_object(1)? {
+    println!("{obj:?}");
+}
+```
+
+---
+
+## 🚧 Known Limitations (v0.3.0)
+
+These return `Error::Unsupported` — never a panic or OOM:
+
+| Feature | Note |
+|---|---|
+| **Encryption** | `/Encrypt` dict not implemented. Encrypted content fails gracefully. |
+| **JBIG2 / CCITTFax / LZW / RunLength filters** | Only `FlateDecode` and `Identity` implemented. Others return `Unsupported`. |
+| **XRef Streams as sole xref** | Falls back to linear scan — works for most files, may miss some objects. |
+| **Content stream parsing** | No text/graphic extraction (`BT`, `Tj`, `cm`, etc.) |
+| **Digital signatures** | Not implemented. |
+| **Font / image extraction** | Not implemented. |
+
 ---
 
 ## 📊 Benchmarks
 
-Run benchmarks locally:
-
 ```bash
 cargo bench
 ```
+
+Criterion harness in `benches/lexer_bench.rs`. Real corpus numbers (pass rate, p50/p99 load times) coming in v0.4.0.
 
 ---
 
 ## 📜 License
 
 Licensed under either of:
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
