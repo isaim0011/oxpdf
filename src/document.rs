@@ -27,24 +27,25 @@ impl<'a> Document<'a> {
         // Fast pre-check: scan last 4 KB for /Encrypt in the trailer region.
         // Full encryption detection happens after xref parse via the trailer dict.
         let trailer_scan_start = data.len().saturating_sub(4096);
-        if memchr::memmem::find(&data[trailer_scan_start..], b"/Encrypt").is_some() {
-            // Confirm: make sure it's in a trailer context, not coincidentally in stream data
-            if memchr::memmem::find(&data[trailer_scan_start..], b"trailer").is_some()
-                || memchr::memmem::find(&data[trailer_scan_start..], b"/Type /XRef").is_some()
-            {
-                return Err(Error::Unsupported("encrypted: /Encrypt key in trailer"));
-            }
+        let trailer_tail = &data[trailer_scan_start..];
+        if memchr::memmem::find(trailer_tail, b"/Encrypt").is_some()
+            && (memchr::memmem::find(trailer_tail, b"trailer").is_some()
+                || memchr::memmem::find(trailer_tail, b"/Type /XRef").is_some())
+        {
+            return Err(Error::Unsupported("encrypted: /Encrypt key in trailer"));
         }
 
         let xref = XRefTable::parse_or_reconstruct(data)?;
 
         // Second check: /Encrypt in the parsed trailer dict
-        if let Some(trailer) = &xref.trailer_dict {
-            if trailer.contains_key("Encrypt") {
-                return Err(Error::Unsupported(
-                    "encrypted: /Encrypt in trailer dictionary",
-                ));
-            }
+        if xref
+            .trailer_dict
+            .as_ref()
+            .is_some_and(|t| t.contains_key("Encrypt"))
+        {
+            return Err(Error::Unsupported(
+                "encrypted: /Encrypt in trailer dictionary",
+            ));
         }
 
         Ok(Self {
@@ -374,7 +375,7 @@ impl<'a> Document<'a> {
                             .map(|(_, i)| *i)
                             .unwrap_or(0);
                         xref_data.push(2); // type 2 = compressed
-                        xref_data.extend_from_slice(&(objstm_id as u32).to_be_bytes());
+                        xref_data.extend_from_slice(&objstm_id.to_be_bytes());
                         xref_data.extend_from_slice(&(idx as u32).to_be_bytes());
                     } else {
                         // Normal uncompressed object

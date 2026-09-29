@@ -204,7 +204,7 @@ fn main() {
     if !summary.failures_by_type.is_empty() {
         println!("\nFailures Grouped by Error Type:");
         let mut sorted_failures: Vec<_> = summary.failures_by_type.into_iter().collect();
-        sorted_failures.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted_failures.sort_by_key(|a| std::cmp::Reverse(a.1));
         for (err_type, count) in sorted_failures {
             println!("  [{:>3}] {}", count, err_type);
         }
