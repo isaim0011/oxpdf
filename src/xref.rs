@@ -106,11 +106,7 @@ impl XRefTable {
     /// - Field 1 (w1): type (0=free, 1=uncompressed offset, 2=compressed in ObjStm)
     /// - Field 2 (w2): for type 1 = byte offset; for type 2 = ObjStm object id
     /// - Field 3 (w3): for type 1 = generation; for type 2 = index within ObjStm
-    fn parse_xref_stream(
-        data: &[u8],
-        offset: usize,
-        table: &mut XRefTable,
-    ) -> Result<Option<u64>> {
+    fn parse_xref_stream(data: &[u8], offset: usize, table: &mut XRefTable) -> Result<Option<u64>> {
         use crate::parser::Parser;
         use crate::types::Object;
 
@@ -184,9 +180,18 @@ impl XRefTable {
                 message: "XRef stream /W must have exactly 3 elements",
             });
         }
-        let w0 = match &w_arr[0] { Object::Integer(i) => *i as usize, _ => 0 };
-        let w1 = match &w_arr[1] { Object::Integer(i) => *i as usize, _ => 0 };
-        let w2 = match &w_arr[2] { Object::Integer(i) => *i as usize, _ => 0 };
+        let w0 = match &w_arr[0] {
+            Object::Integer(i) => *i as usize,
+            _ => 0,
+        };
+        let w1 = match &w_arr[1] {
+            Object::Integer(i) => *i as usize,
+            _ => 0,
+        };
+        let w2 = match &w_arr[2] {
+            Object::Integer(i) => *i as usize,
+            _ => 0,
+        };
         let entry_size = w0 + w1 + w2;
         if entry_size == 0 {
             return Err(Error::SyntaxError {
@@ -201,17 +206,17 @@ impl XRefTable {
             _ => 0,
         };
         let index_ranges: Vec<(u32, u32)> = match dict.get("Index") {
-            Some(Object::Array(arr)) if arr.len() >= 2 => {
-                arr.chunks(2)
-                    .filter_map(|chunk| {
-                        if let (Object::Integer(start), Object::Integer(count)) = (&chunk[0], &chunk[1]) {
-                            Some((*start as u32, *count as u32))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            }
+            Some(Object::Array(arr)) if arr.len() >= 2 => arr
+                .chunks(2)
+                .filter_map(|chunk| {
+                    if let (Object::Integer(start), Object::Integer(count)) = (&chunk[0], &chunk[1])
+                    {
+                        Some((*start as u32, *count as u32))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
             _ => vec![(0, size)],
         };
 
@@ -231,30 +236,47 @@ impl XRefTable {
                     read_be_u64(&decoded[pos..pos + w0])
                 };
                 // Read field 2
-                let field2 = if w1 == 0 { 0u64 } else { read_be_u64(&decoded[pos + w0..pos + w0 + w1]) };
+                let field2 = if w1 == 0 {
+                    0u64
+                } else {
+                    read_be_u64(&decoded[pos + w0..pos + w0 + w1])
+                };
                 // Read field 3
-                let field3 = if w2 == 0 { 0u64 } else { read_be_u64(&decoded[pos + w0 + w1..pos + entry_size]) };
+                let field3 = if w2 == 0 {
+                    0u64
+                } else {
+                    read_be_u64(&decoded[pos + w0 + w1..pos + entry_size])
+                };
 
                 // Only insert if not already present (earlier xref takes precedence for incremental updates)
                 if !table.entries.contains_key(&obj_id) {
                     match field_type {
                         0 => {
-                            table.insert(obj_id, XRefEntry::Free {
-                                next_free_id: field2 as u32,
-                                gen: field3 as u16,
-                            });
+                            table.insert(
+                                obj_id,
+                                XRefEntry::Free {
+                                    next_free_id: field2 as u32,
+                                    gen: field3 as u16,
+                                },
+                            );
                         }
                         1 => {
-                            table.insert(obj_id, XRefEntry::InUse {
-                                offset: field2,
-                                gen: field3 as u16,
-                            });
+                            table.insert(
+                                obj_id,
+                                XRefEntry::InUse {
+                                    offset: field2,
+                                    gen: field3 as u16,
+                                },
+                            );
                         }
                         2 => {
-                            table.insert(obj_id, XRefEntry::Compressed {
-                                stream_obj_id: field2 as u32,
-                                index: field3 as u16,
-                            });
+                            table.insert(
+                                obj_id,
+                                XRefEntry::Compressed {
+                                    stream_obj_id: field2 as u32,
+                                    index: field3 as u16,
+                                },
+                            );
                         }
                         _ => {} // Unknown type — skip
                     }

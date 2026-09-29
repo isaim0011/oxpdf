@@ -112,8 +112,14 @@ fn main() {
         // Guard: skip files that are unreasonably large (> 256 MB) to avoid fs::read OOM
         if data.len() > 256 * 1024 * 1024 {
             summary.failed += 1;
-            *summary.failures_by_type.entry("Unsupported: file exceeds 256 MB read limit".to_string()).or_insert(0) += 1;
-            println!("{:<45} | {:<8} | {:<7} | {:<7} | {:<10} | {:<12}", display_name, "SKIP", "-", "-", "-", "-");
+            *summary
+                .failures_by_type
+                .entry("Unsupported: file exceeds 256 MB read limit".to_string())
+                .or_insert(0) += 1;
+            println!(
+                "{:<45} | {:<8} | {:<7} | {:<7} | {:<10} | {:<12}",
+                display_name, "SKIP", "-", "-", "-", "-"
+            );
             continue;
         }
 

@@ -420,7 +420,10 @@ mod tests {
         // First token: 123
         assert_eq!(lexer.next_token().unwrap(), Some(Token::Integer(123)));
         // Second token: lone '>' → must be Err, NOT an infinite loop
-        assert!(lexer.next_token().is_err(), "lone '>' must produce an error, not loop");
+        assert!(
+            lexer.next_token().is_err(),
+            "lone '>' must produce an error, not loop"
+        );
         // After the error the cursor advanced; lexer can still be drained (456)
         assert_eq!(lexer.next_token().unwrap(), Some(Token::Integer(456)));
         assert_eq!(lexer.next_token().unwrap(), None);

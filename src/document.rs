@@ -41,7 +41,9 @@ impl<'a> Document<'a> {
         // Second check: /Encrypt in the parsed trailer dict
         if let Some(trailer) = &xref.trailer_dict {
             if trailer.contains_key("Encrypt") {
-                return Err(Error::Unsupported("encrypted: /Encrypt in trailer dictionary"));
+                return Err(Error::Unsupported(
+                    "encrypted: /Encrypt in trailer dictionary",
+                ));
             }
         }
 
