@@ -406,4 +406,40 @@ mod tests {
         assert_eq!(lexer.next_token().unwrap(), Some(Token::ArrayClose));
         assert_eq!(lexer.next_token().unwrap(), None);
     }
+
+    /// Regression test for the lone `>` infinite-loop bug (v0.4.0).
+    ///
+    /// Before the fix, `read_regular_token` on a bare `>` (not `>>`) would return
+    /// `Token::Keyword("")` without advancing the cursor, causing callers that loop
+    /// on `Ok(Some(...))` to spin forever.  After the fix it must return `Err(...)`.
+    #[test]
+    fn test_lone_gt_returns_error_not_infinite_loop() {
+        let input = b"123 > 456"; // lone '>' between two integers
+        let mut lexer = Lexer::new(input);
+
+        // First token: 123
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::Integer(123)));
+        // Second token: lone '>' → must be Err, NOT an infinite loop
+        assert!(lexer.next_token().is_err(), "lone '>' must produce an error, not loop");
+        // After the error the cursor advanced; lexer can still be drained (456)
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::Integer(456)));
+        assert_eq!(lexer.next_token().unwrap(), None);
+    }
+
+    /// Regression test: a PDF-like byte sequence containing only lone `>` characters
+    /// must produce a finite, bounded sequence of errors (never hangs).
+    #[test]
+    fn test_lone_gt_sequence_terminates() {
+        let input = b"> > > > > > > > > >";
+        let mut lexer = Lexer::new(input);
+        let mut count = 0usize;
+        loop {
+            match lexer.next_token() {
+                Ok(None) => break,
+                Ok(Some(_)) => count += 1,
+                Err(_) => count += 1, // error advances cursor — keep going
+            }
+            assert!(count < 1000, "lexer did not terminate on lone '>' sequence");
+        }
+    }
 }

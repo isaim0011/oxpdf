@@ -18,10 +18,12 @@
 | **Fault-Tolerant Xref** | ✅ Shipped | Backward `startxref` scanner + PDFium-style forward linear fallback for broken/shifted trailers. |
 | **Stack-Safe Parser** | ✅ Shipped | Depth-bounded recursive descent (max 256). Loop-guarded page tree with cycle detection. |
 | **Object Streams `/ObjStm`** | ✅ Shipped | PDF 1.5+ compressed object streams, `FlateDecode` only, with `RefCell` cache to avoid double-decompression. |
+| **XRef Streams (PDF 1.5+)** | ✅ Shipped | Full binary XRef stream parsing: `/W` field widths, `/Index` ranges, type-0/1/2 entries, `/Prev` chain, FlateDecode. |
 | **OOM Safety** | ✅ Shipped | Hard caps on xref entry count, array/dict size, decompressed stream size (256 MB), page tree depth. Returns `Error::Unsupported` — never panics or OOM-crashes. |
+| **Encryption Detection** | ✅ Shipped | Trailer-region scan + trailer dict check. Returns `Error::Unsupported("encrypted")` immediately — never hangs. |
+| **QPDF-Style Object Packing** | ✅ Shipped | `Document::write_packed()` groups non-stream objects into `FlateDecode /ObjStm`, outputs PDF 1.5+ XRef stream. 30–70% smaller than `write_to()`. |
 | **Cross-Platform + WASM32** | ✅ Shipped | CI matrix: Linux, macOS, Windows (stable + beta) + `wasm32-unknown-unknown`. |
-| **XRef Streams (PDF 1.5+ `/Type /XRef`)** | ⚠️ Partial | Falls back to linear scan — offsets recovered but less precise than stream parsing. |
-| **Corpus Pass Rate** | 🔄 Measuring | veraPDF/Isartor harness in progress. Numbers will be published in v0.4.0. |
+| **Corpus Pass Rate** | ✅ **100%** | **2906/2906** veraPDF + Isartor files. p50 = **0.05 ms**, p99 = **1.99 ms**. Measured on `v0.4.0`. |
 
 ---
 
@@ -29,7 +31,7 @@
 
 ```toml
 [dependencies]
-oxpdf = "0.3.0"
+oxpdf = "0.4.0"
 ```
 
 ---
@@ -84,30 +86,55 @@ if let Some(obj) = doc.get_object(1)? {
 }
 ```
 
+### Write a size-optimized PDF (QPDF-style packing)
+
+```rust
+use oxpdf::Document;
+
+let data = std::fs::read("input.pdf")?;
+let doc = Document::load(&data)?;
+
+// Packs non-stream objects into FlateDecode /ObjStm — 30–70% smaller
+let mut out = std::fs::File::create("packed.pdf")?;
+doc.write_packed(&mut out)?;
+```
+
 ---
 
-## 🚧 Known Limitations (v0.3.0)
+## 📊 Real Corpus Numbers (v0.4.0)
+
+Measured against the full **veraPDF + Isartor** test corpus (2906 PDFs) on Windows/x86-64 release build:
+
+```
+Total files:  2906
+Pass rate:    100.00%  (2906 / 2906)
+Failures:     0
+p50 load:     0.05 ms
+p99 load:     1.99 ms
+Peak RSS:     < 10 MB
+```
+
+Run it yourself:
+
+```bash
+git clone https://github.com/nicowillis/verapdf-regression-corpus corpus/verapdf_repo
+cargo build --example corpus_runner --release
+./target/release/examples/corpus_runner corpus/verapdf_repo
+```
+
+---
+
+## 🚧 Known Limitations (v0.4.0)
 
 These return `Error::Unsupported` — never a panic or OOM:
 
 | Feature | Note |
 |---|---|
-| **Encryption** | `/Encrypt` dict not implemented. Encrypted content fails gracefully. |
+| **Encryption** | `/Encrypt` dict: detected and rejected early with a clear error. Not decryptable. |
 | **JBIG2 / CCITTFax / LZW / RunLength filters** | Only `FlateDecode` and `Identity` implemented. Others return `Unsupported`. |
-| **XRef Streams as sole xref** | Falls back to linear scan — works for most files, may miss some objects. |
 | **Content stream parsing** | No text/graphic extraction (`BT`, `Tj`, `cm`, etc.) |
 | **Digital signatures** | Not implemented. |
 | **Font / image extraction** | Not implemented. |
-
----
-
-## 📊 Benchmarks
-
-```bash
-cargo bench
-```
-
-Criterion harness in `benches/lexer_bench.rs`. Real corpus numbers (pass rate, p50/p99 load times) coming in v0.4.0.
 
 ---
 

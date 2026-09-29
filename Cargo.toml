@@ -1,6 +1,6 @@
 [package]
 name = "oxpdf"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 rust-version = "1.80"
 authors = ["isaim0011 <https://github.com/isaim0011>"]
