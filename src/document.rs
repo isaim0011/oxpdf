@@ -20,8 +20,31 @@ pub struct Document<'a> {
 
 impl<'a> Document<'a> {
     /// Loads a document by inspecting its cross-reference structure or reconstructing it.
+    ///
+    /// Returns `Err(Error::Unsupported("encrypted"))` immediately for password-protected PDFs
+    /// rather than producing garbled output or hanging.
     pub fn load(data: &'a [u8]) -> Result<Self> {
+        // Fast pre-check: scan last 4 KB for /Encrypt in the trailer region.
+        // Full encryption detection happens after xref parse via the trailer dict.
+        let trailer_scan_start = data.len().saturating_sub(4096);
+        if memchr::memmem::find(&data[trailer_scan_start..], b"/Encrypt").is_some() {
+            // Confirm: make sure it's in a trailer context, not coincidentally in stream data
+            if memchr::memmem::find(&data[trailer_scan_start..], b"trailer").is_some()
+                || memchr::memmem::find(&data[trailer_scan_start..], b"/Type /XRef").is_some()
+            {
+                return Err(Error::Unsupported("encrypted: /Encrypt key in trailer"));
+            }
+        }
+
         let xref = XRefTable::parse_or_reconstruct(data)?;
+
+        // Second check: /Encrypt in the parsed trailer dict
+        if let Some(trailer) = &xref.trailer_dict {
+            if trailer.contains_key("Encrypt") {
+                return Err(Error::Unsupported("encrypted: /Encrypt in trailer dictionary"));
+            }
+        }
+
         Ok(Self {
             data,
             xref,

@@ -109,9 +109,21 @@ fn main() {
             }
         };
 
+        // Guard: skip files that are unreasonably large (> 256 MB) to avoid fs::read OOM
+        if data.len() > 256 * 1024 * 1024 {
+            summary.failed += 1;
+            *summary.failures_by_type.entry("Unsupported: file exceeds 256 MB read limit".to_string()).or_insert(0) += 1;
+            println!("{:<45} | {:<8} | {:<7} | {:<7} | {:<10} | {:<12}", display_name, "SKIP", "-", "-", "-", "-");
+            continue;
+        }
+
+        // Print NOW so if OOM kills the process mid-load we know the exact file
+        eprint!("[loading] {} ({} bytes)... ", file.display(), data.len());
+
         let start = Instant::now();
         match Document::load(&data) {
             Ok(doc) => {
+                eprintln!("ok");
                 let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
                 let obj_count = doc.object_count();
                 let page_count = doc.page_count().unwrap_or(0);
@@ -126,6 +138,7 @@ fn main() {
                 );
             }
             Err(err) => {
+                eprintln!("FAIL: {err}");
                 summary.failed += 1;
                 let err_desc = match &err {
                     oxpdf::Error::UnexpectedEof(offset) => format!("UnexpectedEof({})", offset),

@@ -301,6 +301,17 @@ impl<'a> Lexer<'a> {
             self.pos += 1;
         }
 
+        // If cursor didn't advance, the current byte is an unrecognised delimiter
+        // (e.g. a lone '>' that isn't part of '>>'). Advance past it and return
+        // an error — this breaks caller loops and avoids infinite re-reading.
+        if self.pos == start {
+            self.pos += 1;
+            return Err(Error::SyntaxError {
+                offset: start,
+                message: "Unexpected delimiter character",
+            });
+        }
+
         let slice = &self.data[start..self.pos];
         if slice == b"true" {
             return Ok(Token::Boolean(true));

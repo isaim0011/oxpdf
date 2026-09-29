@@ -5,6 +5,16 @@ use crate::types::Object;
 use memchr::memmem;
 use std::collections::BTreeMap;
 
+/// Reads up to 8 bytes as a big-endian u64. Used for XRef stream binary field decoding (PDF §7.5.8).
+#[inline]
+fn read_be_u64(bytes: &[u8]) -> u64 {
+    let mut result = 0u64;
+    for &b in bytes.iter().take(8) {
+        result = (result << 8) | (b as u64);
+    }
+    result
+}
+
 /// Entry in the Cross-Reference table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum XRefEntry {
@@ -74,14 +84,206 @@ impl XRefTable {
                     }
                 }
                 Some(Token::Integer(_)) => {
-                    // Possible XRef Stream (PDF 1.5+) - handled gracefully or fallback
-                    break;
+                    // PDF 1.5+ XRef Stream: `N G obj << /Type /XRef ... >> stream ... endstream`
+                    // The startxref offset points to the object id, not to an `xref` keyword.
+                    match Self::parse_xref_stream(data, current_offset as usize, &mut table) {
+                        Ok(Some(prev)) => current_offset = prev,
+                        Ok(None) => break,
+                        Err(_) => break, // Fall through to linear reconstruction
+                    }
                 }
                 _ => break,
             }
         }
 
         Ok(table)
+    }
+
+    /// Parses a PDF 1.5+ cross-reference stream object (ISO 32000-1 §7.5.8).
+    ///
+    /// Format: `N G obj << /Type /XRef /Size N /W [w1 w2 w3] ... >> stream ... endstream`
+    /// Each entry is `w1+w2+w3` bytes:
+    /// - Field 1 (w1): type (0=free, 1=uncompressed offset, 2=compressed in ObjStm)
+    /// - Field 2 (w2): for type 1 = byte offset; for type 2 = ObjStm object id
+    /// - Field 3 (w3): for type 1 = generation; for type 2 = index within ObjStm
+    fn parse_xref_stream(
+        data: &[u8],
+        offset: usize,
+        table: &mut XRefTable,
+    ) -> Result<Option<u64>> {
+        use crate::parser::Parser;
+        use crate::types::Object;
+
+        let mut parser = Parser::new(&data[offset..]);
+        let lexer = parser.lexer_mut();
+
+        // Skip: id gen obj
+        let _id = lexer.next_token()?;
+        let _gen = lexer.next_token()?;
+        match lexer.next_token()? {
+            Some(Token::Keyword("obj")) => {}
+            _ => {
+                return Err(Error::SyntaxError {
+                    offset,
+                    message: "Expected 'obj' keyword in XRef stream",
+                })
+            }
+        }
+
+        // Parse the stream object
+        let stream_obj = parser.parse_object()?;
+        let (dict, raw_data) = match stream_obj {
+            Some(Object::Stream { dict, data }) => (dict, data),
+            _ => {
+                return Err(Error::SyntaxError {
+                    offset,
+                    message: "XRef stream is not a stream object",
+                })
+            }
+        };
+
+        // Validate /Type /XRef
+        match dict.get("Type").and_then(|t| t.as_name()) {
+            Some("XRef") => {}
+            _ => {
+                return Err(Error::SyntaxError {
+                    offset,
+                    message: "Stream at startxref is not /Type /XRef",
+                })
+            }
+        }
+
+        // Decompress if FlateDecode
+        let is_flate = dict
+            .get("Filter")
+            .and_then(|f| f.as_name())
+            .map(|n| n == "FlateDecode")
+            .unwrap_or(false);
+
+        let decoded: Vec<u8> = if is_flate {
+            let view = crate::stream::StreamView::new(&raw_data)
+                .with_filter(crate::stream::FilterKind::FlateDecode);
+            view.decode()?
+        } else {
+            raw_data.to_vec()
+        };
+
+        // Read /W [w1 w2 w3] field widths
+        let w_arr = match dict.get("W") {
+            Some(Object::Array(arr)) => arr,
+            _ => {
+                return Err(Error::SyntaxError {
+                    offset,
+                    message: "XRef stream missing /W array",
+                })
+            }
+        };
+        if w_arr.len() < 3 {
+            return Err(Error::SyntaxError {
+                offset,
+                message: "XRef stream /W must have exactly 3 elements",
+            });
+        }
+        let w0 = match &w_arr[0] { Object::Integer(i) => *i as usize, _ => 0 };
+        let w1 = match &w_arr[1] { Object::Integer(i) => *i as usize, _ => 0 };
+        let w2 = match &w_arr[2] { Object::Integer(i) => *i as usize, _ => 0 };
+        let entry_size = w0 + w1 + w2;
+        if entry_size == 0 {
+            return Err(Error::SyntaxError {
+                offset,
+                message: "XRef stream has zero entry size",
+            });
+        }
+
+        // Read /Index [start count start count ...] — defaults to [0, /Size]
+        let size = match dict.get("Size") {
+            Some(Object::Integer(s)) => *s as u32,
+            _ => 0,
+        };
+        let index_ranges: Vec<(u32, u32)> = match dict.get("Index") {
+            Some(Object::Array(arr)) if arr.len() >= 2 => {
+                arr.chunks(2)
+                    .filter_map(|chunk| {
+                        if let (Object::Integer(start), Object::Integer(count)) = (&chunk[0], &chunk[1]) {
+                            Some((*start as u32, *count as u32))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            }
+            _ => vec![(0, size)],
+        };
+
+        // Decode entries
+        let mut pos = 0usize;
+        for (start_id, count) in &index_ranges {
+            for i in 0..*count {
+                if pos + entry_size > decoded.len() {
+                    break;
+                }
+                let obj_id = start_id + i;
+
+                // Read field 1: type
+                let field_type = if w0 == 0 {
+                    1u64 // default type is 1 when w0=0
+                } else {
+                    read_be_u64(&decoded[pos..pos + w0])
+                };
+                // Read field 2
+                let field2 = if w1 == 0 { 0u64 } else { read_be_u64(&decoded[pos + w0..pos + w0 + w1]) };
+                // Read field 3
+                let field3 = if w2 == 0 { 0u64 } else { read_be_u64(&decoded[pos + w0 + w1..pos + entry_size]) };
+
+                // Only insert if not already present (earlier xref takes precedence for incremental updates)
+                if !table.entries.contains_key(&obj_id) {
+                    match field_type {
+                        0 => {
+                            table.insert(obj_id, XRefEntry::Free {
+                                next_free_id: field2 as u32,
+                                gen: field3 as u16,
+                            });
+                        }
+                        1 => {
+                            table.insert(obj_id, XRefEntry::InUse {
+                                offset: field2,
+                                gen: field3 as u16,
+                            });
+                        }
+                        2 => {
+                            table.insert(obj_id, XRefEntry::Compressed {
+                                stream_obj_id: field2 as u32,
+                                index: field3 as u16,
+                            });
+                        }
+                        _ => {} // Unknown type — skip
+                    }
+                }
+                pos += entry_size;
+            }
+        }
+
+        // Extract /Root and /Info for trailer_dict (only on first/latest xref)
+        if table.trailer_dict.is_none() {
+            let mut trailer_map = std::collections::BTreeMap::new();
+            if let Some(Object::Reference { id, .. }) = dict.get("Root") {
+                trailer_map.insert("Root".to_string(), id.to_string());
+            }
+            if let Some(Object::Integer(s)) = dict.get("Size") {
+                trailer_map.insert("Size".to_string(), s.to_string());
+            }
+            if !trailer_map.is_empty() {
+                table.trailer_dict = Some(trailer_map);
+            }
+        }
+
+        // Follow /Prev chain for incremental updates
+        match dict.get("Prev") {
+            Some(Object::Integer(prev)) if *prev > 0 && (*prev as usize) < data.len() => {
+                Ok(Some(*prev as u64))
+            }
+            _ => Ok(None),
+        }
     }
 
     /// Find the byte offset of `startxref` by scanning backward from the file end.
@@ -220,8 +422,13 @@ impl XRefTable {
 
             let mut lexer = Lexer::new(slice);
             let mut tokens = Vec::new();
+            // Cap at 128 tokens — a 64-byte lookback slice can only produce ~30 tokens
+            // in normal PDF. The cap is defense-in-depth against lexer runaway.
             while let Ok(Some(tok)) = lexer.next_token() {
                 tokens.push(tok);
+                if tokens.len() > 128 {
+                    break;
+                }
             }
 
             if tokens.len() >= 2 {
