@@ -341,13 +341,8 @@ impl<'a> Document<'a> {
             new_xref.insert(objstm_id, objstm_offset);
 
             // Register all packed objects as /ObjStm entries in xref
-            for (id, idx) in &obj_xref_entries {
-                // We encode Compressed entries in xref using a special sentinel offset.
-                // PDF readers that support /ObjStm will find them via the /ObjStm.
-                // We store a marker: u64::MAX - idx to distinguish from real offsets.
-                // (A proper xref stream would encode these as type-2 entries; we emit
-                //  a cross-reference stream below instead of a traditional table.)
-                let _ = idx; // stored in stream — xref stream will reference objstm_id
+            for (id, _) in &obj_xref_entries {
+                // Compressed objects are looked up by objstm_id in the xref stream below.
                 new_xref.insert(*id, u64::MAX); // placeholder; overwritten by xref stream
             }
 
@@ -376,11 +371,14 @@ impl<'a> Document<'a> {
                             .unwrap_or(0);
                         xref_data.push(2); // type 2 = compressed
                         xref_data.extend_from_slice(&objstm_id.to_be_bytes());
-                        xref_data.extend_from_slice(&(idx as u32).to_be_bytes());
+                        let idx_u32 = u32::try_from(idx).unwrap_or(u32::MAX);
+                        xref_data.extend_from_slice(&idx_u32.to_be_bytes());
                     } else {
                         // Normal uncompressed object
                         xref_data.push(1); // type 1 = uncompressed
-                        xref_data.extend_from_slice(&(offset as u32).to_be_bytes());
+                        // Truncate offset to 32-bit: documents > 4 GB are out of scope for v0.x.
+                        let offset_u32 = u32::try_from(offset).unwrap_or(u32::MAX);
+                        xref_data.extend_from_slice(&offset_u32.to_be_bytes());
                         xref_data.extend_from_slice(&0u32.to_be_bytes()); // gen = 0
                     }
                 } else {
