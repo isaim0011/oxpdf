@@ -376,7 +376,7 @@ impl<'a> Document<'a> {
                     } else {
                         // Normal uncompressed object
                         xref_data.push(1); // type 1 = uncompressed
-                        // Truncate offset to 32-bit: documents > 4 GB are out of scope for v0.x.
+                                           // Truncate offset to 32-bit: documents > 4 GB are out of scope for v0.x.
                         let offset_u32 = u32::try_from(offset).unwrap_or(u32::MAX);
                         xref_data.extend_from_slice(&offset_u32.to_be_bytes());
                         xref_data.extend_from_slice(&0u32.to_be_bytes()); // gen = 0
