@@ -32,20 +32,19 @@ fn collect_pdfs<P: AsRef<Path>>(dir: P, files: &mut Vec<PathBuf>) {
 }
 
 fn get_peak_rss_kb() -> usize {
-    // RSS measurement via K32GetProcessMemoryCounters requires psapi linkage
-    // which is unavailable in the mingw toolchain. Return 0 on Windows;
-    // measure separately with Task Manager / perfmon if needed.
-    #[cfg(target_family = "unix")]
+    // Pure stdlib RSS check on Linux without requiring the external `libc` crate
+    #[cfg(target_os = "linux")]
     {
-        use std::mem::MaybeUninit;
-        unsafe {
-            let mut usage = MaybeUninit::<libc::rusage>::uninit();
-            if libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) == 0 {
-                let u = usage.assume_init();
-                #[cfg(target_os = "macos")]
-                return (u.ru_maxrss / 1024) as usize;
-                #[cfg(not(target_os = "macos"))]
-                return u.ru_maxrss as usize;
+        if let Ok(status) = fs::read_to_string("/proc/self/status") {
+            for line in status.lines() {
+                if line.starts_with("VmHWM:") || line.starts_with("VmRSS:") {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let Ok(kb) = parts[1].parse::<usize>() {
+                            return kb;
+                        }
+                    }
+                }
             }
         }
     }
