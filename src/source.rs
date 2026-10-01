@@ -72,9 +72,8 @@ pub struct MmapSource {
 impl MmapSource {
     /// Memory maps the provided open file for zero-copy random access.
     pub fn open(file: &File) -> Result<Self> {
-        let mmap = unsafe {
-            memmap2::Mmap::map(file).map_err(|e| Error::Io(format!("mmap error: {e}")))?
-        };
+        let mmap =
+            unsafe { memmap2::Mmap::map(file).map_err(|e| Error::Io(format!("mmap error: {e}")))? };
         Ok(Self { mmap })
     }
 }

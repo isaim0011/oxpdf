@@ -30,10 +30,7 @@ pub enum Error {
     },
 
     #[error("Cyclic reference detected: object {object_id} gen {generation}")]
-    CyclicReference {
-        object_id: u32,
-        generation: u16,
-    },
+    CyclicReference { object_id: u32, generation: u16 },
 
     #[error("Truncated file: expected offset {expected_offset}, file length is {file_len}")]
     TruncatedFile {
@@ -42,17 +39,13 @@ pub enum Error {
     },
 
     #[error("Unsupported filter: {name}")]
-    UnsupportedFilter {
-        name: String,
-    },
+    UnsupportedFilter { name: String },
 
     #[error("Missing PDF trailer")]
     MissingTrailer,
 
     #[error("Document repair pass failed after {attempts} recovery attempts")]
-    RecoveryFailed {
-        attempts: u32,
-    },
+    RecoveryFailed { attempts: u32 },
 
     #[error("I/O error: {0}")]
     Io(String),

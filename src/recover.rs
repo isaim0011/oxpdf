@@ -30,7 +30,12 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
         // Ensure "obj" is followed by whitespace or delimiter
         if match_idx + 3 < data.len() {
             let next_b = data[match_idx + 3];
-            if !next_b.is_ascii_whitespace() && next_b != b'<' && next_b != b'[' && next_b != b'/' && next_b != b'%' {
+            if !next_b.is_ascii_whitespace()
+                && next_b != b'<'
+                && next_b != b'['
+                && next_b != b'/'
+                && next_b != b'%'
+            {
                 continue;
             }
         }

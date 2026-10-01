@@ -87,9 +87,8 @@ fn test_corpus_verification_harness() {
 
         // Enforce zero panics via catch_unwind
         let t0 = Instant::now();
-        let load_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            Document::load(&data)
-        }));
+        let load_result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Document::load(&data)));
         let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
         metrics.load_times_ms.push(elapsed_ms);
 
@@ -136,7 +135,9 @@ fn test_corpus_verification_harness() {
         }
     }
 
-    metrics.load_times_ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    metrics
+        .load_times_ms
+        .sort_by(|a, b| a.partial_cmp(b).unwrap());
     let p50 = if metrics.load_times_ms.is_empty() {
         0.0
     } else {
