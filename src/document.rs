@@ -55,6 +55,37 @@ impl<'a> Document<'a> {
         })
     }
 
+    /// Loads a document strictly per §3.1: fails immediately on any structural corruption
+    /// without attempting recovery.
+    pub fn load_strict(data: &'a [u8]) -> Result<Self> {
+        let trailer_scan_start = data.len().saturating_sub(4096);
+        let trailer_tail = &data[trailer_scan_start..];
+        if memchr::memmem::find(trailer_tail, b"/Encrypt").is_some()
+            && (memchr::memmem::find(trailer_tail, b"trailer").is_some()
+                || memchr::memmem::find(trailer_tail, b"/Type /XRef").is_some())
+        {
+            return Err(Error::Unsupported("encrypted: /Encrypt key in trailer"));
+        }
+
+        let xref = XRefTable::parse_standard(data)?;
+
+        if xref
+            .trailer_dict
+            .as_ref()
+            .is_some_and(|t| t.contains_key("Encrypt"))
+        {
+            return Err(Error::Unsupported(
+                "encrypted: /Encrypt in trailer dictionary",
+            ));
+        }
+
+        Ok(Self {
+            data,
+            xref,
+            obj_stm_cache: RefCell::new(HashMap::new()),
+        })
+    }
+
     /// Fetches an indirect object by id without parsing other objects.
     /// If the object is stored directly in the document, returns a zero-copy borrowed `Object<'static>`.
     pub fn get_object(&self, id: u32) -> Result<Option<Object<'static>>> {
@@ -590,5 +621,24 @@ startxref\n\
 
         let obj12 = doc.get_object(12).unwrap().unwrap();
         assert_eq!(obj12, Object::name("SecondObject"));
+    }
+
+    #[test]
+    fn test_load_strict_vs_load_recovery() {
+        // PDF with severed/missing xref and missing startxref
+        let severed_pdf = b"%PDF-1.4\n\
+1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\
+2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n\
+%%EOF";
+
+        // load_strict MUST fail immediately without attempting recovery
+        assert!(Document::load_strict(severed_pdf).is_err());
+
+        // Document::load MUST recover objects and synthesized catalog per §3.1 and §3.2
+        let recovered = Document::load(severed_pdf).unwrap();
+        assert_eq!(recovered.object_count(), 2);
+        assert_eq!(recovered.catalog_id().unwrap(), 1);
+        let cat = recovered.get_object(1).unwrap().unwrap();
+        assert!(matches!(cat, Object::Dictionary(_)));
     }
 }

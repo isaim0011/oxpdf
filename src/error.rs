@@ -23,6 +23,37 @@ pub enum Error {
     #[error("Excessive recursion or depth limit ({0}) exceeded")]
     RecursionLimitExceeded(usize),
 
+    #[error("Broken cross-reference table/stream at offset {offset}: expected {expected}")]
+    BrokenXref {
+        offset: usize,
+        expected: &'static str,
+    },
+
+    #[error("Cyclic reference detected: object {object_id} gen {generation}")]
+    CyclicReference {
+        object_id: u32,
+        generation: u16,
+    },
+
+    #[error("Truncated file: expected offset {expected_offset}, file length is {file_len}")]
+    TruncatedFile {
+        expected_offset: usize,
+        file_len: usize,
+    },
+
+    #[error("Unsupported filter: {name}")]
+    UnsupportedFilter {
+        name: String,
+    },
+
+    #[error("Missing PDF trailer")]
+    MissingTrailer,
+
+    #[error("Document repair pass failed after {attempts} recovery attempts")]
+    RecoveryFailed {
+        attempts: u32,
+    },
+
     #[error("I/O error: {0}")]
     Io(String),
 

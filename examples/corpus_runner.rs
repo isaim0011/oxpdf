@@ -160,6 +160,24 @@ fn main() {
                     oxpdf::Error::RecursionLimitExceeded(d) => {
                         format!("RecursionLimitExceeded({})", d)
                     }
+                    oxpdf::Error::BrokenXref { offset, expected } => {
+                        format!("BrokenXref({}: expected {})", offset, expected)
+                    }
+                    oxpdf::Error::CyclicReference {
+                        object_id,
+                        generation,
+                    } => format!("CyclicReference({} gen {})", object_id, generation),
+                    oxpdf::Error::TruncatedFile {
+                        expected_offset,
+                        file_len,
+                    } => format!("TruncatedFile({} > {})", expected_offset, file_len),
+                    oxpdf::Error::UnsupportedFilter { name } => {
+                        format!("UnsupportedFilter({})", name)
+                    }
+                    oxpdf::Error::MissingTrailer => "MissingTrailer".to_string(),
+                    oxpdf::Error::RecoveryFailed { attempts } => {
+                        format!("RecoveryFailed({} attempts)", attempts)
+                    }
                     oxpdf::Error::Io(s) => format!("Io({})", s),
                     oxpdf::Error::Unsupported(s) => format!("Unsupported: {}", s),
                 };

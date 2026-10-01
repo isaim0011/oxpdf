@@ -55,8 +55,8 @@ impl XRefTable {
                 return Ok(table);
             }
         }
-        // Fallback: Chromium PDFium-style resilient linear reconstructor
-        Self::reconstruct_linear_scan(data)
+        // Fallback per §3.2: Chromium PDFium-style resilient linear reconstructor owned by `recover.rs`
+        crate::recover::repair(data)
     }
 
     /// Standard backward resolution from `startxref`.
@@ -432,46 +432,10 @@ impl XRefTable {
     }
 
     /// PDFium-inspired raw forward scanner: scans entire file looking for `N M obj` tokens.
-    /// Used when the trailer is severed, xref table is corrupt, or `/Prev` loop causes recursion failure.
+    ///
+    /// Delegates directly to `crate::recover::repair` which owns the §3.2 repair algorithm.
     pub fn reconstruct_linear_scan(data: &[u8]) -> Result<Self> {
-        let mut table = Self::new();
-        let obj_finder = memmem::Finder::new(b"obj");
-
-        for match_idx in obj_finder.find_iter(data) {
-            // Check preceding tokens backwards: need `<id> <gen> obj`
-            let lookback_start = match_idx.saturating_sub(64);
-            let slice = &data[lookback_start..match_idx];
-
-            let mut lexer = Lexer::new(slice);
-            let mut tokens = Vec::new();
-            // Cap at 128 tokens — a 64-byte lookback slice can only produce ~30 tokens
-            // in normal PDF. The cap is defense-in-depth against lexer runaway.
-            while let Ok(Some(tok)) = lexer.next_token() {
-                tokens.push(tok);
-                if tokens.len() > 128 {
-                    break;
-                }
-            }
-
-            if tokens.len() >= 2 {
-                if let (Token::Integer(id), Token::Integer(gen)) =
-                    (&tokens[tokens.len() - 2], &tokens[tokens.len() - 1])
-                {
-                    if *id > 0 && *gen >= 0 {
-                        // Compute true byte offset of start of `<id>`
-                        table.insert(
-                            *id as u32,
-                            XRefEntry::InUse {
-                                offset: lookback_start as u64,
-                                gen: *gen as u16,
-                            },
-                        );
-                    }
-                }
-            }
-        }
-
-        Ok(table)
+        crate::recover::repair(data)
     }
 }
 
