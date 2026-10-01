@@ -249,10 +249,7 @@ startxref\n\
 #[test]
 fn test_content_parser_recursion_limit() {
     // Deeply nested array inside content stream
-    let mut nested = Vec::new();
-    for _ in 0..100 {
-        nested.push(b'[');
-    }
+    let nested = vec![b'['; 100];
     let mut parser = oxpdf::content::ContentParser::new(&nested);
     let res = parser.parse();
     assert!(matches!(res, Err(Error::RecursionLimitExceeded(_))));
