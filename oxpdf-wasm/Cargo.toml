@@ -2,6 +2,14 @@
 name = "oxpdf-wasm"
 version = "1.0.1"
 edition = "2021"
+description = "WebAssembly bindings for oxpdf, high-performance streaming PDF parser"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/isaim0011/oxpdf"
+homepage = "https://github.com/isaim0011/oxpdf"
+documentation = "https://docs.rs/oxpdf-wasm"
+readme = "README.md"
+keywords = ["pdf", "wasm", "webassembly", "parser", "text-extraction"]
+categories = ["wasm", "text-processing", "parser-implementations"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
