@@ -417,7 +417,7 @@ mod tests {
         }
 
         let delim_chars = b"()<>[{}/%]";
-        for &b in &delim_chars {
+        for &b in delim_chars {
             assert!(
                 !is_whitespace(b),
                 "Byte {:?} should not be whitespace",
