@@ -128,7 +128,7 @@ impl<W: Write> Serializer<W> {
         self.bytes_written = self
             .bytes_written
             .checked_add(bytes.len() as u64)
-            .ok_or_else(|| Error::Unsupported("file size overflow"))?;
+            .ok_or(Error::Unsupported("file size overflow"))?;
         Ok(())
     }
 }

@@ -367,7 +367,7 @@ impl<'a> Document<'a> {
                 .max()
                 .unwrap_or(0)
                 .checked_add(1)
-                .ok_or_else(|| Error::Unsupported("object id overflow"))?;
+                .ok_or(Error::Unsupported("object id overflow"))?;
 
             // Build the /ObjStm payload:
             //   Header section: "id1 offset1 id2 offset2 ..."
@@ -432,7 +432,7 @@ impl<'a> Document<'a> {
             let xref_offset = ser.bytes_written();
             let xref_id = objstm_id
                 .checked_add(1)
-                .ok_or_else(|| Error::Unsupported("xref object id overflow"))?;
+                .ok_or(Error::Unsupported("xref object id overflow"))?;
 
             // XRef stream entries: 3 bytes each in format (type, field2, field3)
             // Type 0 = free, Type 1 = uncompressed, Type 2 = compressed (/ObjStm)
@@ -491,7 +491,7 @@ impl<'a> Document<'a> {
                 .unwrap_or("1");
             let size = max_id
                 .checked_add(2)
-                .ok_or_else(|| Error::Unsupported("max_id overflow"))?;
+                .ok_or(Error::Unsupported("max_id overflow"))?;
 
             let xref_dict = format!(
                 "{} 0 obj\n<< /Type /XRef /Size {} /W [1 4 4] /Root {} 0 R /Filter /FlateDecode /Length {} >>\nstream\n",

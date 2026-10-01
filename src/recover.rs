@@ -120,7 +120,7 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
             let enclosing_obj = object_offsets
                 .iter()
                 .filter(|(_, (_, offset))| {
-                    usize::try_from(*offset).map_or(false, |off| off < cat_match)
+                    usize::try_from(*offset).is_ok_and(|off| off < cat_match)
                 })
                 .max_by_key(|(_, (_, offset))| *offset);
 

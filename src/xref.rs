@@ -234,10 +234,11 @@ impl XRefTable {
         let mut pos = 0usize;
         for (start_id, count) in &index_ranges {
             for i in 0..*count {
-                if pos
-                    .checked_add(entry_size)
-                    .map_or(true, |end| end > decoded.len())
-                {
+                let is_oob = match pos.checked_add(entry_size) {
+                    Some(end) => end > decoded.len(),
+                    None => true,
+                };
+                if is_oob {
                     break;
                 }
                 let obj_id = match start_id.checked_add(i) {
