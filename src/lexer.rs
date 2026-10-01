@@ -141,11 +141,11 @@ impl<'a> Lexer<'a> {
         match b {
             b'[' => {
                 self.pos += 1;
-                return Ok(Some(Token::ArrayOpen));
+                Ok(Some(Token::ArrayOpen))
             }
             b']' => {
                 self.pos += 1;
-                return Ok(Some(Token::ArrayClose));
+                Ok(Some(Token::ArrayClose))
             }
             b'/' => self.read_name().map(Some),
             b'(' => self.read_literal_string().map(Some),
