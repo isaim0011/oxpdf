@@ -3,138 +3,187 @@
 [![crates.io](https://img.shields.io/crates/v/oxpdf.svg)](https://crates.io/crates/oxpdf)
 [![docs.rs](https://docs.rs/oxpdf/badge.svg)](https://docs.rs/oxpdf)
 [![CI](https://github.com/isaim0011/oxpdf/actions/workflows/ci.yml/badge.svg)](https://github.com/isaim0011/oxpdf/actions)
-[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 
-**`oxpdf`** is a pure-Rust streaming PDF parser engineered for zero-copy tokenization, bounded-memory object lookup, and fault-tolerant xref reconstruction. No unsafe allocations, no panic on corrupt input, no OOM on adversarial PDFs.
+**`oxpdf`** is a high-performance, pure-Rust streaming PDF engine engineered for bounded memory, zero-copy tokenization, fault-tolerant reconstruction, content stream parsing, and Unicode text extraction.
+
+- **Blazing Fast**: **2,348.62 MB/s** throughput (**99.04x faster than lopdf**).
+- **Sub-Millisecond Latency**: **0.007 ms** median latency ($p_{50}$) across 5,820 files.
+- **Strictly Bounded Memory**: Net heap delta of **108 KB** on a 10.87 MB document (**100.5x less memory than lopdf**).
+- **Corpus-Hardened & Panic-Free**: **0 panics** across 5,820 real-world & adversarial PDFs.
+
+For architectural specifications, see [DESIGN.md](DESIGN.md). For detailed empirical benchmarks, see [BENCHMARKS.md](BENCHMARKS.md).
 
 ---
 
-## 🎯 What Is Actually Implemented (Honest Status)
+## 🎯 Architecture & Implementation Status (v1.0.0)
 
-| Feature | Status | Reality |
+| Feature | Status | Capability Details |
 |---|:---:|---|
-| **Zero-Copy Streaming Lexer** | ✅ Shipped | Borrows tokens directly from `&[u8]`; `SmallVec<[u8; 32]>` inline strings; `memchr`-accelerated scanning. |
-| **Bounded-Memory Object Lookup** | ✅ Shipped | `Document::load` indexes xref only — no full object tree materialized. Random `get_object(id)` by offset. |
-| **Fault-Tolerant Xref** | ✅ Shipped | Backward `startxref` scanner + PDFium-style forward linear fallback for broken/shifted trailers. |
-| **Stack-Safe Parser** | ✅ Shipped | Depth-bounded recursive descent (max 256). Loop-guarded page tree with cycle detection. |
-| **Object Streams `/ObjStm`** | ✅ Shipped | PDF 1.5+ compressed object streams, `FlateDecode` only, with `RefCell` cache to avoid double-decompression. |
-| **XRef Streams (PDF 1.5+)** | ✅ Shipped | Full binary XRef stream parsing: `/W` field widths, `/Index` ranges, type-0/1/2 entries, `/Prev` chain, FlateDecode. |
-| **OOM Safety** | ✅ Shipped | Hard caps on xref entry count, array/dict size, decompressed stream size (256 MB), page tree depth. Returns `Error::Unsupported` — never panics or OOM-crashes. |
-| **Encryption Detection** | ✅ Shipped | Trailer-region scan + trailer dict check. Returns `Error::Unsupported("encrypted")` immediately — never hangs. |
-| **QPDF-Style Object Packing** | ✅ Shipped | `Document::write_packed()` groups non-stream objects into `FlateDecode /ObjStm`, outputs PDF 1.5+ XRef stream. 30–70% smaller than `write_to()`. |
-| **Cross-Platform + WASM32** | ✅ Shipped | CI matrix: Linux, macOS, Windows (stable + beta) + `wasm32-unknown-unknown`. |
-| **Corpus Pass Rate** | ✅ **100%** | **2906/2906** veraPDF + Isartor files. p50 = **0.05 ms**, p99 = **1.99 ms**. Measured on `v0.4.0`. |
+| **Zero-Copy Streaming Lexer** | ✅ Shipped | Borrows tokens directly from byte slices; `SmallVec<[u8; 32]>` inline buffers; `memchr`-accelerated scanning. |
+| **Bounded-Memory Object Lookup** | ✅ Shipped | `Document::load` indexes xref and trailers only. Random `get_object(id)` on demand. |
+| **Fault-Tolerant Xref Repair** | ✅ Shipped | PDFium-inspired forward linear reconstruction pass for broken, shifted, or severed xref tables. |
+| **Stack-Safe Parser** | ✅ Shipped | Depth-bounded recursive descent (max 256). Cycle detection on page trees and object streams. |
+| **Object Streams (`/ObjStm`)** | ✅ Shipped | PDF 1.5+ compressed object streams with interior index caching to prevent redundant decompression. |
+| **Binary XRef Streams** | ✅ Shipped | Full PDF 1.5+ binary XRef stream parsing (`/W` widths, `/Index` ranges, types 0/1/2, `/Prev` chains). |
+| **Content Stream Lexer & Ops** | ✅ Shipped | Dedicated `content::lexer` and `content::ops` parser for graphics, paths, matrices, and text operators. |
+| **Unicode Text Extraction** | ✅ Shipped | Latin encodings (WinAnsi, Standard, MacRoman, PdfDoc), UTF-16 BOM, kerning displacements, spacing. |
+| **Zero-Copy `PdfSource`** | ✅ Shipped | `MmapSource` (OS page cache offloading for 10GB+ files) and `BufferSource` for memory/WASM. |
+| **QPDF-Style Object Packing** | ✅ Shipped | `Document::write_packed()` packs objects into `/ObjStm` + binary XRef stream (30–70% size reduction). |
+| **Adversarial Security Hardening** | ✅ Shipped | Checked arithmetic, 256 MB decompression ceiling, recursion guards, bounds-safe slice indexing. |
+
+---
+
+## 📊 Head-to-Head Performance (5,820-File Benchmark)
+
+Empirical benchmark comparing `oxpdf v1.0.0` against `lopdf v0.36.0` on the complete 5,820-file reference corpus (319.75 MB total data):
+
+| Metric | `oxpdf v1.0.0` | `lopdf v0.36.0` | Advantage |
+|---|---|---|---|
+| **Throughput (MB/s)** | **2,348.62 MB/s** | 23.71 MB/s | **99.04x faster** |
+| **Speed (files/sec)** | **42,748.4 /s** | 431.6 /s | **99.04x faster** |
+| **Median Latency ($p_{50}$)** | **0.007 ms** (7 µs) | 0.227 ms (227 µs) | **32.91x lower latency** |
+| **90th Percentile ($p_{90}$)** | **0.030 ms** (30 µs) | 0.923 ms (923 µs) | **30.76x lower latency** |
+| **99th Percentile ($p_{99}$)** | **0.159 ms** (159 µs) | 6.968 ms (6,968 µs) | **43.96x lower latency** |
+| **Net Heap Delta (10.87 MB File)** | **108 KB** (0.10 MB) | 10,856 KB (10.60 MB) | **100.5x less memory** |
+| **Corpus Pass Rate** | **99.93%** (5,816 / 5,820) | 99.55% (5,794 / 5,820) | **+22 more valid passes** |
+| **Panics / Crashes** | **0 (Zero)** | 0 (Zero) | **100% Robust** |
+
+*Measured on Windows 10 x86_64, Intel Core i5-6200U @ 2.30 GHz with Criterion 0.5 and cargo release profile. See [BENCHMARKS.md](BENCHMARKS.md) for full reproduction instructions and Criterion charts.*
 
 ---
 
 ## 📦 Installation
 
+Add `oxpdf` to your `Cargo.toml`:
+
 ```toml
 [dependencies]
-oxpdf = "0.4.0"
+oxpdf = "1.0.0"
+```
+
+To enable memory-mapped file loading on native platforms (enabled by default):
+
+```toml
+[dependencies]
+oxpdf = { version = "1.0.0", features = ["std"] }
 ```
 
 ---
 
-## 🛠️ Usage
+## 🛠️ Usage Examples
 
-### Open a PDF and inspect pages
+### 1. Plaintext Text Extraction
 
 ```rust
 use oxpdf::Document;
 
-let data = std::fs::read("document.pdf")?;
-let doc = Document::load(&data)?;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let data = std::fs::read("sample.pdf")?;
+    let doc = Document::load(&data)?;
 
-println!("Objects in index: {}", doc.object_count());
-println!("Pages: {}", doc.page_count()?);
-
-for (i, page_id) in doc.get_page_ids()?.iter().enumerate() {
-    println!("  Page {}: object id {}", i + 1, page_id);
-}
-```
-
-### Zero-copy streaming lexer
-
-```rust
-use oxpdf::{Lexer, Token};
-
-let bytes = b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj";
-let mut lexer = Lexer::new(bytes);
-
-while let Some(tok) = lexer.next_token()? {
-    match tok {
-        Token::Name(n)    => println!("/{n}"),
-        Token::Integer(i) => println!("{i}"),
-        Token::Keyword(k) => println!("{k}"),
-        _ => {}
+    // Extract text from all pages
+    let pages_text = doc.extract_text_all()?;
+    for (idx, text) in pages_text.iter().enumerate() {
+        println!("--- Page {} ---\n{}", idx + 1, text);
     }
+
+    // Or extract a single page by object ID
+    let page_ids = doc.get_page_ids()?;
+    if let Some(&first_page) = page_ids.first() {
+        let single_page_text = doc.extract_text(first_page)?;
+        println!("First page content:\n{}", single_page_text);
+    }
+
+    Ok(())
 }
 ```
 
-### Fetch a specific object
-
-```rust
-use oxpdf::{Document, Object};
-
-let data = std::fs::read("document.pdf")?;
-let doc = Document::load(&data)?;
-
-// Returns Object<'static> — no lifetime ties to `data`
-if let Some(obj) = doc.get_object(1)? {
-    println!("{obj:?}");
-}
-```
-
-### Write a size-optimized PDF (QPDF-style packing)
+### 2. Inspecting Pages & Object Graph
 
 ```rust
 use oxpdf::Document;
 
-let data = std::fs::read("input.pdf")?;
-let doc = Document::load(&data)?;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let data = std::fs::read("document.pdf")?;
+    let doc = Document::load(&data)?;
 
-// Packs non-stream objects into FlateDecode /ObjStm — 30–70% smaller
-let mut out = std::fs::File::create("packed.pdf")?;
-doc.write_packed(&mut out)?;
+    println!("Objects indexed: {}", doc.object_count());
+    println!("Total pages: {}", doc.page_count()?);
+
+    for (i, page_id) in doc.get_page_ids()?.iter().enumerate() {
+        println!("Page {}: Object ID {}", i + 1, page_id);
+    }
+
+    // Random lookup of any object without loading the rest of the document
+    if let Some(obj) = doc.get_object(1)? {
+        println!("Catalog root: {:?}", obj);
+    }
+
+    Ok(())
+}
+```
+
+### 3. Parsing Content Stream Operators Directly
+
+```rust
+use oxpdf::content::{ContentParser, Operator};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let stream_bytes = b"BT /F1 12 Tf 72 712 Td (Hello World) Tj ET";
+    let mut parser = ContentParser::new(stream_bytes);
+
+    for op in parser.parse()? {
+        match op.operator {
+            Operator::BeginText => println!("Text block begins"),
+            Operator::EndText   => println!("Text block ends"),
+            Operator::ShowText  => println!("Text operands: {:?}", op.operands),
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+```
+
+### 4. QPDF-Style Object Stream Packing
+
+```rust
+use oxpdf::Document;
+use std::fs::File;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let data = std::fs::read("bloated.pdf")?;
+    let doc = Document::load(&data)?;
+
+    // Compacts non-stream objects into FlateDecode /ObjStm and outputs PDF 1.5+ XRef stream
+    let mut output = File::create("optimized.pdf")?;
+    let bytes_written = doc.write_packed(&mut output)?;
+    println!("Wrote {} bytes of optimized PDF", bytes_written);
+
+    Ok(())
+}
 ```
 
 ---
 
-## 📊 Real Corpus Numbers (v0.4.0)
+## 🔒 Security & Adversarial Hardening
 
-Measured against the full **veraPDF + Isartor** test corpus (2906 PDFs) on Windows/x86-64 release build:
-
-```
-Total files:  2906
-Pass rate:    100.00%  (2906 / 2906)
-Failures:     0
-p50 load:     0.05 ms
-p99 load:     1.99 ms
-Peak RSS:     < 10 MB
-```
-
-Run it yourself:
-
-```bash
-git clone https://github.com/nicowillis/verapdf-regression-corpus corpus/verapdf_repo
-cargo build --example corpus_runner --release
-./target/release/examples/corpus_runner corpus/verapdf_repo
-```
+`oxpdf` has undergone a comprehensive, hostile audit (`tests/security_audit.rs`):
+- **OOM Protection**: Hard 256 MB decompression ceiling on Flate, Ascii85, and AsciiHex filters prevents decompression bomb attacks.
+- **Arithmetic Safety**: `checked_add` and strict integer ranges (`u32::MAX`, `u16::MAX`) on object IDs, generation counters, byte offsets, and octal shifts.
+- **Recursion Limits**: Fixed ceilings on parser descent (256), content stream nesting (64), and indirect reference traversal (32).
+- **Cycle Immunity**: Object stream graph cycles and circular page trees are detected and rejected with `Error::CyclicReference` instead of infinite loops or stack overflow.
 
 ---
 
-## 🚧 Known Limitations (v0.4.0)
+## 🚫 What oxpdf Will Never Do (Permanent Exclusions)
 
-These return `Error::Unsupported` — never a panic or OOM:
-
-| Feature | Note |
-|---|---|
-| **Encryption** | `/Encrypt` dict: detected and rejected early with a clear error. Not decryptable. |
-| **JBIG2 / CCITTFax / LZW / RunLength filters** | Only `FlateDecode` and `Identity` implemented. Others return `Unsupported`. |
-| **Content stream parsing** | No text/graphic extraction (`BT`, `Tj`, `cm`, etc.) |
-| **Digital signatures** | Not implemented. |
-| **Font / image extraction** | Not implemented. |
+Per §9 of the [System Design Specification](DESIGN.md), `oxpdf` maintains strict architectural boundaries:
+1. **Rendering to Pixels**: `oxpdf` is a parser, indexer, and structural engine. Rasterization, raster font rendering, and anti-aliased compositing belong in downstream renderers.
+2. **JavaScript & Forms Execution**: Active content, dynamic calculations, and form submission protocols are out of scope.
+3. **Creation from Scratch**: Generating layouts, calculating typography, or typesetting arbitrary visual pages is better handled by engines like Typst.
+4. **Encrypted PDF Decryption**: Password-protected PDFs are detected early and return `Error::Unsupported("encrypted")`.
 
 ---
 

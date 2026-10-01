@@ -49,6 +49,38 @@ fn read_proc_rss_kb() -> usize {
             }
         }
     }
+    #[cfg(windows)]
+    {
+        #[repr(C)]
+        struct PROCESS_MEMORY_COUNTERS {
+            cb: u32,
+            page_fault_count: u32,
+            peak_working_set_size: usize,
+            working_set_size: usize,
+            quota_peak_paged_pool_usage: usize,
+            quota_paged_pool_usage: usize,
+            quota_peak_non_paged_pool_usage: usize,
+            quota_non_paged_pool_usage: usize,
+            pagefile_usage: usize,
+            peak_pagefile_usage: usize,
+        }
+        #[link(name = "psapi")]
+        extern "system" {
+            fn GetCurrentProcess() -> *mut std::ffi::c_void;
+            fn GetProcessMemoryInfo(
+                process: *mut std::ffi::c_void,
+                counters: *mut PROCESS_MEMORY_COUNTERS,
+                cb: u32,
+            ) -> i32;
+        }
+        unsafe {
+            let mut counters: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+            counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+            if GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) != 0 {
+                return counters.working_set_size / 1024;
+            }
+        }
+    }
     0
 }
 

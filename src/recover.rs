@@ -60,7 +60,7 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
             let (tok_gen, _) = &tokens_with_pos[tokens_with_pos.len() - 1];
 
             if let (Token::Integer(id), Token::Integer(gen)) = (tok_id, tok_gen) {
-                if *id > 0 && *gen >= 0 && *gen <= u16::MAX as i64 {
+                if *id > 0 && *id <= u32::MAX as i64 && *gen >= 0 && *gen <= u16::MAX as i64 {
                     let obj_id = *id as u32;
                     let gen_u16 = *gen as u16;
 
@@ -99,7 +99,13 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
         if let Ok(Some(Object::Dictionary(dict))) = parser.parse_object() {
             let mut string_dict = std::collections::BTreeMap::new();
             for (k, v) in dict {
-                string_dict.insert(k.into_owned(), format!("{v:?}"));
+                let val = match &v {
+                    Object::Reference { id, .. } => id.to_string(),
+                    Object::Integer(i) => i.to_string(),
+                    Object::Name(n) => n.to_string(),
+                    _ => format!("{v:?}"),
+                };
+                string_dict.insert(k.into_owned(), val);
             }
             trailer_dict = Some(string_dict);
             // Later trailer (closer to EOF) wins in incremental update model
@@ -113,13 +119,18 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
             // Find which object encloses this /Catalog marker
             let enclosing_obj = object_offsets
                 .iter()
-                .filter(|(_, (_, offset))| (*offset as usize) < cat_match)
+                .filter(|(_, (_, offset))| {
+                    usize::try_from(*offset).map_or(false, |off| off < cat_match)
+                })
                 .max_by_key(|(_, (_, offset))| *offset);
 
             if let Some((&cat_id, _)) = enclosing_obj {
                 let mut synth_trailer = std::collections::BTreeMap::new();
                 synth_trailer.insert("Root".to_string(), cat_id.to_string());
-                synth_trailer.insert("Size".to_string(), (table.entries.len() + 1).to_string());
+                synth_trailer.insert(
+                    "Size".to_string(),
+                    (table.entries.len().saturating_add(1)).to_string(),
+                );
                 trailer_dict = Some(synth_trailer);
                 break;
             }

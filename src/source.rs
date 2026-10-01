@@ -35,13 +35,17 @@ impl<'a> BufferSource<'a> {
 
 impl<'a> PdfSource for BufferSource<'a> {
     fn read_at(&self, offset: usize, len: usize) -> Result<&[u8]> {
-        if offset + len > self.data.len() {
+        let end = offset.checked_add(len).ok_or(Error::TruncatedFile {
+            expected_offset: usize::MAX,
+            file_len: self.data.len(),
+        })?;
+        if end > self.data.len() {
             return Err(Error::TruncatedFile {
-                expected_offset: offset + len,
+                expected_offset: end,
                 file_len: self.data.len(),
             });
         }
-        Ok(&self.data[offset..offset + len])
+        Ok(&self.data[offset..end])
     }
 
     fn len(&self) -> usize {
@@ -81,13 +85,17 @@ impl MmapSource {
 #[cfg(not(target_arch = "wasm32"))]
 impl PdfSource for MmapSource {
     fn read_at(&self, offset: usize, len: usize) -> Result<&[u8]> {
-        if offset + len > self.mmap.len() {
+        let end = offset.checked_add(len).ok_or(Error::TruncatedFile {
+            expected_offset: usize::MAX,
+            file_len: self.mmap.len(),
+        })?;
+        if end > self.mmap.len() {
             return Err(Error::TruncatedFile {
-                expected_offset: offset + len,
+                expected_offset: end,
                 file_len: self.mmap.len(),
             });
         }
-        Ok(&self.mmap[offset..offset + len])
+        Ok(&self.mmap[offset..end])
     }
 
     fn len(&self) -> usize {

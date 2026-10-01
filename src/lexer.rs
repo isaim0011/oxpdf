@@ -65,13 +65,15 @@ impl<'a> Lexer<'a> {
         let start = self.pos;
 
         if let Some(len) = explicit_length {
-            if start + len <= self.data.len() {
-                let payload = &self.data[start..start + len];
-                self.pos = start + len;
-                // Skip trailing whitespace/newlines before endstream
-                self.skip_whitespace();
-                if let Some(Token::Keyword("endstream")) = self.next_token()? {
-                    return Ok(payload);
+            if let Some(end) = start.checked_add(len) {
+                if end <= self.data.len() {
+                    let payload = &self.data[start..end];
+                    self.pos = end;
+                    // Skip trailing whitespace/newlines before endstream
+                    self.skip_whitespace();
+                    if let Some(Token::Keyword("endstream")) = self.next_token()? {
+                        return Ok(payload);
+                    }
                 }
             }
         }
@@ -154,7 +156,9 @@ impl<'a> Lexer<'a> {
 
     #[inline]
     fn peek_byte(&self, offset: usize) -> Option<u8> {
-        self.data.get(self.pos + offset).copied()
+        self.pos
+            .checked_add(offset)
+            .and_then(|idx| self.data.get(idx).copied())
     }
 
     fn skip_comment(&mut self) {
@@ -227,19 +231,19 @@ impl<'a> Lexer<'a> {
                         }
                     }
                     b'0'..=b'7' => {
-                        // Octal escape up to 3 digits
-                        let mut oct_val = esc - b'0';
+                        // Octal escape up to 3 digits (PDF spec §7.3.4.2: high-order overflow ignored)
+                        let mut oct_val = (esc - b'0') as u16;
                         for _ in 0..2 {
                             if let Some(next) = self.peek_byte(0) {
                                 if (b'0'..=b'7').contains(&next) {
                                     self.pos += 1;
-                                    oct_val = (oct_val << 3) + (next - b'0');
+                                    oct_val = (oct_val << 3) + ((next - b'0') as u16);
                                 } else {
                                     break;
                                 }
                             }
                         }
-                        out.push(oct_val);
+                        out.push((oct_val & 0xFF) as u8);
                     }
                     other => out.push(other),
                 }

@@ -1,6 +1,6 @@
 [package]
 name = "oxpdf"
-version = "0.4.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.80"
 authors = ["isaim0011 <https://github.com/isaim0011>"]
@@ -25,9 +25,15 @@ memmap2 = "0.9"
 
 [dev-dependencies]
 criterion = "0.5"
+lopdf = { version = "0.36", default-features = false }
+
 
 [[bench]]
 name = "lexer_bench"
+harness = false
+
+[[bench]]
+name = "corpus_bench"
 harness = false
 
 [features]

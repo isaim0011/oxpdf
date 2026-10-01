@@ -51,7 +51,15 @@ impl<'a> StreamView<'a> {
     /// Decompresses stream payload into memory only when demanded.
     /// Returns `Error::Unsupported` if decompressed size exceeds `MAX_DECOMPRESS_BYTES`.
     pub fn decode(&self) -> Result<Vec<u8>> {
-        if self.filters.is_empty() || self.filters.contains(&FilterKind::Identity) {
+        if self.raw_data.len() > Self::MAX_DECOMPRESS_BYTES {
+            return Err(Error::Unsupported(
+                "stream exceeds 256 MB safety limit",
+            ));
+        }
+
+        if self.filters.is_empty()
+            || (self.filters.len() == 1 && self.filters[0] == FilterKind::Identity)
+        {
             return Ok(self.raw_data.to_vec());
         }
 
@@ -75,13 +83,134 @@ impl<'a> StreamView<'a> {
                     }
                     current = decompressed;
                 }
+                FilterKind::AsciiHexDecode => {
+                    current = decode_ascii_hex(&current)?;
+                }
+                FilterKind::Ascii85Decode => {
+                    current = decode_ascii85(&current)?;
+                }
                 FilterKind::Identity => {}
-                _ => return Err(Error::Unsupported("unsupported stream filter")),
+            }
+
+            if current.len() > Self::MAX_DECOMPRESS_BYTES {
+                return Err(Error::Unsupported(
+                    "decompressed stream exceeds 256 MB safety limit",
+                ));
             }
         }
 
         Ok(current)
     }
+}
+
+/// Decodes standard PDF AsciiHexDecode byte streams with strict safety bounds.
+fn decode_ascii_hex(input: &[u8]) -> Result<Vec<u8>> {
+    let mut out = Vec::with_capacity((input.len() / 2).min(StreamView::MAX_DECOMPRESS_BYTES));
+    let mut first_nibble: Option<u8> = None;
+
+    for &b in input {
+        if b.is_ascii_whitespace() {
+            continue;
+        }
+        if b == b'>' {
+            break;
+        }
+        let val = match b {
+            b'0'..=b'9' => b - b'0',
+            b'a'..=b'f' => b - b'a' + 10,
+            b'A'..=b'F' => b - b'A' + 10,
+            _ => {
+                return Err(Error::InvalidHexString(out.len()));
+            }
+        };
+
+        if let Some(high) = first_nibble.take() {
+            if out.len() >= StreamView::MAX_DECOMPRESS_BYTES {
+                return Err(Error::Unsupported(
+                    "decompressed stream exceeds 256 MB safety limit",
+                ));
+            }
+            out.push((high << 4) | val);
+        } else {
+            first_nibble = Some(val);
+        }
+    }
+
+    // PDF spec: if odd number of hex digits before '>', pad with '0'
+    if let Some(high) = first_nibble {
+        if out.len() >= StreamView::MAX_DECOMPRESS_BYTES {
+            return Err(Error::Unsupported(
+                "decompressed stream exceeds 256 MB safety limit",
+            ));
+        }
+        out.push(high << 4);
+    }
+
+    Ok(out)
+}
+
+/// Decodes standard PDF Ascii85Decode (btoa) streams with strict safety bounds.
+fn decode_ascii85(input: &[u8]) -> Result<Vec<u8>> {
+    let mut out = Vec::with_capacity(input.len().min(StreamView::MAX_DECOMPRESS_BYTES));
+    let mut tuple = 0u32;
+    let mut count = 0;
+    let mut i = 0;
+
+    while i < input.len() {
+        let b = input[i];
+        if b.is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+        if b == b'~' && i + 1 < input.len() && input[i + 1] == b'>' {
+            break;
+        }
+        if b == b'z' && count == 0 {
+            if out.len() + 4 > StreamView::MAX_DECOMPRESS_BYTES {
+                return Err(Error::Unsupported(
+                    "decompressed stream exceeds 256 MB safety limit",
+                ));
+            }
+            out.extend_from_slice(&[0, 0, 0, 0]);
+            i += 1;
+            continue;
+        }
+        if !(b'!'..=b'u').contains(&b) {
+            return Err(Error::Unsupported("Invalid Ascii85 character"));
+        }
+
+        tuple = tuple.saturating_mul(85).saturating_add((b - b'!') as u32);
+        count += 1;
+
+        if count == 5 {
+            if out.len() + 4 > StreamView::MAX_DECOMPRESS_BYTES {
+                return Err(Error::Unsupported(
+                    "decompressed stream exceeds 256 MB safety limit",
+                ));
+            }
+            out.extend_from_slice(&tuple.to_be_bytes());
+            tuple = 0;
+            count = 0;
+        }
+        i += 1;
+    }
+
+    // Handle partial group at end
+    if count > 1 {
+        for _ in count..5 {
+            tuple = tuple.saturating_mul(85).saturating_add(84); // pad with 'u' - '!' = 84
+        }
+        let bytes = tuple.to_be_bytes();
+        let needed = count - 1;
+        if out.len() + needed > StreamView::MAX_DECOMPRESS_BYTES {
+            return Err(Error::Unsupported(
+                "decompressed stream exceeds 256 MB safety limit",
+            ));
+        }
+        out.extend_from_slice(&bytes[..needed]);
+    }
+
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -103,5 +232,22 @@ mod tests {
 
         let decoded = stream_view.decode().unwrap();
         assert_eq!(decoded, payload);
+    }
+
+    #[test]
+    fn test_ascii_hex_stream() {
+        let hex_payload = b"48656c6c6f206f7870646621>"; // "Hello oxpdf!"
+        let stream = StreamView::new(hex_payload).with_filter(FilterKind::AsciiHexDecode);
+        let decoded = stream.decode().unwrap();
+        assert_eq!(decoded, b"Hello oxpdf!");
+    }
+
+    #[test]
+    fn test_ascii85_stream() {
+        // "Hello world!" in ASCII85 is "87cURD]j7BEbo80~>"
+        let a85_payload = b"87cURD]j7BEbo80~>";
+        let stream = StreamView::new(a85_payload).with_filter(FilterKind::Ascii85Decode);
+        let decoded = stream.decode().unwrap();
+        assert_eq!(decoded, b"Hello world!");
     }
 }

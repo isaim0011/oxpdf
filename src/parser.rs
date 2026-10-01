@@ -48,10 +48,12 @@ impl<'a> Parser<'a> {
                 let checkpoint = self.lexer.cursor();
                 if let Ok(Some(Token::Integer(gen))) = self.lexer.next_token() {
                     if let Ok(Some(Token::Keyword("R"))) = self.lexer.next_token() {
-                        return Ok(Some(Object::Reference {
-                            id: i as u32,
-                            gen: gen as u16,
-                        }));
+                        if i > 0 && i <= u32::MAX as i64 && gen >= 0 && gen <= u16::MAX as i64 {
+                            return Ok(Some(Object::Reference {
+                                id: i as u32,
+                                gen: gen as u16,
+                            }));
+                        }
                     }
                 }
                 // Rewind if not reference
@@ -129,7 +131,7 @@ impl<'a> Parser<'a> {
                 match self.lexer.next_token()? {
                     Some(Token::Keyword("stream")) => {
                         let explicit_len = dict.get("Length").and_then(|obj| match obj {
-                            Object::Integer(i) if *i >= 0 => Some(*i as usize),
+                            Object::Integer(i) if *i >= 0 => usize::try_from(*i).ok(),
                             _ => None,
                         });
                         let stream_bytes = self.lexer.read_stream_payload(explicit_len)?;

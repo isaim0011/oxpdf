@@ -91,7 +91,10 @@ impl<'a> Document<'a> {
     pub fn get_object(&self, id: u32) -> Result<Option<Object<'static>>> {
         match self.xref.get(id) {
             Some(XRefEntry::InUse { offset, .. }) => {
-                let start = *offset as usize;
+                let start = match usize::try_from(*offset) {
+                    Ok(s) => s,
+                    Err(_) => return Err(Error::UnexpectedEof(usize::MAX)),
+                };
                 if start >= self.data.len() {
                     return Err(Error::UnexpectedEof(start));
                 }
@@ -122,6 +125,19 @@ impl<'a> Document<'a> {
                 let stm_id = *stream_obj_id;
                 let idx = *index;
 
+                if stm_id == id {
+                    return Err(Error::CyclicReference {
+                        object_id: id,
+                        generation: 0,
+                    });
+                }
+                // Disallow /ObjStm nested inside another /ObjStm (prohibited by PDF spec §7.5.7)
+                if let Some(XRefEntry::Compressed { .. }) = self.xref.get(stm_id) {
+                    return Err(Error::Unsupported(
+                        "recursive /ObjStm compression is forbidden by PDF spec §7.5.7",
+                    ));
+                }
+
                 // Check cache first or populate it
                 let has_cached = self.obj_stm_cache.borrow().contains_key(&stm_id);
                 if !has_cached {
@@ -143,7 +159,9 @@ impl<'a> Document<'a> {
                             };
 
                             let first = match dict.get("First") {
-                                Some(Object::Integer(f)) if *f >= 0 => *f as usize,
+                                Some(Object::Integer(f)) if *f >= 0 => {
+                                    usize::try_from(*f).unwrap_or(0)
+                                }
                                 _ => 0,
                             };
                             (first, dec)
@@ -170,7 +188,11 @@ impl<'a> Document<'a> {
                     let offset_tok = header_lexer.next_token()?;
                     if i == idx {
                         if let Some(Token::Integer(o)) = offset_tok {
-                            target_offset_in_data = Some(first_offset + o as usize);
+                            if o >= 0 {
+                                if let Ok(o_usize) = usize::try_from(o) {
+                                    target_offset_in_data = first_offset.checked_add(o_usize);
+                                }
+                            }
                         }
                         break;
                     }
@@ -201,7 +223,17 @@ impl<'a> Document<'a> {
             .trailer_dict
             .as_ref()
             .and_then(|t| t.get("Root"))
-            .and_then(|r| r.parse::<u32>().ok())
+            .and_then(|r| {
+                r.parse::<u32>().ok().or_else(|| {
+                    if let Some(idx) = r.find("id: ") {
+                        let sub = &r[idx + 4..];
+                        let digits: String = sub.chars().take_while(|c| c.is_ascii_digit()).collect();
+                        digits.parse::<u32>().ok()
+                    } else {
+                        None
+                    }
+                })
+            })
     }
 
     /// Recursively flattens the page tree (/Pages -> /Kids) using a loop-guarded worklist.
@@ -249,7 +281,9 @@ impl<'a> Document<'a> {
                             // Reverse to maintain natural document page order
                             for kid in kids.iter().rev() {
                                 if let Object::Reference { id, .. } = kid {
-                                    worklist.push(*id);
+                                    if !visited.contains(id) {
+                                        worklist.push(*id);
+                                    }
                                 }
                             }
                         }
@@ -265,6 +299,21 @@ impl<'a> Document<'a> {
     /// Returns the resolved page count of the document.
     pub fn page_count(&self) -> Result<usize> {
         self.get_page_ids().map(|p| p.len())
+    }
+
+    /// Extracts Unicode plaintext from a specific page by ID (§1, §7, Tier 5).
+    pub fn extract_text(&self, page_id: u32) -> Result<String> {
+        crate::text::extract_page_text(self, page_id)
+    }
+
+    /// Extracts Unicode plaintext from all pages in document order.
+    pub fn extract_text_all(&self) -> Result<Vec<String>> {
+        let page_ids = self.get_page_ids()?;
+        let mut pages = Vec::with_capacity(page_ids.len());
+        for id in page_ids {
+            pages.push(self.extract_text(id)?);
+        }
+        Ok(pages)
     }
 
     /// QPDF-style object stream packing.
@@ -316,7 +365,8 @@ impl<'a> Document<'a> {
                 .chain(packable_objs.iter().map(|(id, _)| *id))
                 .max()
                 .unwrap_or(0)
-                + 1;
+                .checked_add(1)
+                .ok_or_else(|| Error::Unsupported("object id overflow"))?;
 
             // Build the /ObjStm payload:
             //   Header section: "id1 offset1 id2 offset2 ..."
@@ -379,7 +429,9 @@ impl<'a> Document<'a> {
 
             // Build a proper PDF 1.5 cross-reference stream instead of traditional xref table
             let xref_offset = ser.bytes_written();
-            let xref_id = objstm_id + 1;
+            let xref_id = objstm_id
+                .checked_add(1)
+                .ok_or_else(|| Error::Unsupported("xref object id overflow"))?;
 
             // XRef stream entries: 3 bytes each in format (type, field2, field3)
             // Type 0 = free, Type 1 = uncompressed, Type 2 = compressed (/ObjStm)
@@ -436,7 +488,9 @@ impl<'a> Document<'a> {
                 .and_then(|t| t.get("Root"))
                 .map(|s| s.as_str())
                 .unwrap_or("1");
-            let size = max_id + 2; // +1 for xref object, +1 for 0-based
+            let size = max_id
+                .checked_add(2)
+                .ok_or_else(|| Error::Unsupported("max_id overflow"))?;
 
             let xref_dict = format!(
                 "{} 0 obj\n<< /Type /XRef /Size {} /W [1 4 4] /Root {} 0 R /Filter /FlateDecode /Length {} >>\nstream\n",

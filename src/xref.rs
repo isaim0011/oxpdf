@@ -68,7 +68,11 @@ impl XRefTable {
 
         while current_offset < data.len() as u64 && !visited_offsets.contains(&current_offset) {
             visited_offsets.insert(current_offset);
-            let mut lexer = Lexer::new(&data[current_offset as usize..]);
+            let cur_usize = match usize::try_from(current_offset) {
+                Ok(u) if u < data.len() => u,
+                _ => break,
+            };
+            let mut lexer = Lexer::new(&data[cur_usize..]);
 
             match lexer.next_token()? {
                 Some(Token::Keyword("xref")) => {
@@ -76,7 +80,7 @@ impl XRefTable {
                         &mut lexer,
                         &mut table,
                         data,
-                        current_offset as usize,
+                        cur_usize,
                     )?;
                     match next_prev {
                         Some(prev) => current_offset = prev,
@@ -86,7 +90,7 @@ impl XRefTable {
                 Some(Token::Integer(_)) => {
                     // PDF 1.5+ XRef Stream: `N G obj << /Type /XRef ... >> stream ... endstream`
                     // The startxref offset points to the object id, not to an `xref` keyword.
-                    match Self::parse_xref_stream(data, current_offset as usize, &mut table) {
+                    match Self::parse_xref_stream(data, cur_usize, &mut table) {
                         Ok(Some(prev)) => current_offset = prev,
                         Ok(None) => break,
                         Err(_) => break, // Fall through to linear reconstruction
@@ -181,40 +185,47 @@ impl XRefTable {
             });
         }
         let w0 = match &w_arr[0] {
-            Object::Integer(i) => *i as usize,
+            Object::Integer(i) if *i >= 0 && *i <= 8 => *i as usize,
             _ => 0,
         };
         let w1 = match &w_arr[1] {
-            Object::Integer(i) => *i as usize,
+            Object::Integer(i) if *i >= 0 && *i <= 8 => *i as usize,
             _ => 0,
         };
         let w2 = match &w_arr[2] {
-            Object::Integer(i) => *i as usize,
+            Object::Integer(i) if *i >= 0 && *i <= 8 => *i as usize,
             _ => 0,
         };
-        let entry_size = w0 + w1 + w2;
-        if entry_size == 0 {
-            return Err(Error::SyntaxError {
-                offset,
-                message: "XRef stream has zero entry size",
-            });
-        }
+        let entry_size = match w0.checked_add(w1).and_then(|s| s.checked_add(w2)) {
+            Some(s) if s > 0 => s,
+            _ => {
+                return Err(Error::SyntaxError {
+                    offset,
+                    message: "XRef stream has invalid entry size",
+                });
+            }
+        };
 
         // Read /Index [start count start count ...] — defaults to [0, /Size]
         let size = match dict.get("Size") {
-            Some(Object::Integer(s)) => *s as u32,
+            Some(Object::Integer(s)) if *s >= 0 => u32::try_from(*s).unwrap_or(0),
             _ => 0,
         };
         let index_ranges: Vec<(u32, u32)> = match dict.get("Index") {
             Some(Object::Array(arr)) if arr.len() >= 2 => arr
                 .chunks(2)
                 .filter_map(|chunk| {
-                    if let (Object::Integer(start), Object::Integer(count)) = (&chunk[0], &chunk[1])
-                    {
-                        Some((*start as u32, *count as u32))
-                    } else {
-                        None
+                    if chunk.len() == 2 {
+                        if let (Object::Integer(start), Object::Integer(count)) = (&chunk[0], &chunk[1])
+                        {
+                            if *start >= 0 && *count >= 0 {
+                                if let (Ok(s), Ok(c)) = (u32::try_from(*start), u32::try_from(*count)) {
+                                    return Some((s, c));
+                                }
+                            }
+                        }
                     }
+                    None
                 })
                 .collect(),
             _ => vec![(0, size)],
@@ -224,10 +235,13 @@ impl XRefTable {
         let mut pos = 0usize;
         for (start_id, count) in &index_ranges {
             for i in 0..*count {
-                if pos + entry_size > decoded.len() {
+                if pos.checked_add(entry_size).map_or(true, |end| end > decoded.len()) {
                     break;
                 }
-                let obj_id = start_id + i;
+                let obj_id = match start_id.checked_add(i) {
+                    Some(id) => id,
+                    None => break,
+                };
 
                 // Read field 1: type
                 let field_type = if w0 == 0 {
@@ -255,8 +269,8 @@ impl XRefTable {
                             table.insert(
                                 obj_id,
                                 XRefEntry::Free {
-                                    next_free_id: field2 as u32,
-                                    gen: field3 as u16,
+                                    next_free_id: u32::try_from(field2).unwrap_or(u32::MAX),
+                                    gen: u16::try_from(field3).unwrap_or(u16::MAX),
                                 },
                             );
                         }
@@ -265,7 +279,7 @@ impl XRefTable {
                                 obj_id,
                                 XRefEntry::InUse {
                                     offset: field2,
-                                    gen: field3 as u16,
+                                    gen: u16::try_from(field3).unwrap_or(u16::MAX),
                                 },
                             );
                         }
@@ -273,15 +287,18 @@ impl XRefTable {
                             table.insert(
                                 obj_id,
                                 XRefEntry::Compressed {
-                                    stream_obj_id: field2 as u32,
-                                    index: field3 as u16,
+                                    stream_obj_id: u32::try_from(field2).unwrap_or(u32::MAX),
+                                    index: u16::try_from(field3).unwrap_or(u16::MAX),
                                 },
                             );
                         }
                         _ => {} // Unknown type — skip
                     }
                 }
-                pos += entry_size;
+                pos = match pos.checked_add(entry_size) {
+                    Some(p) => p,
+                    None => break,
+                };
             }
         }
 
@@ -301,7 +318,7 @@ impl XRefTable {
 
         // Follow /Prev chain for incremental updates
         match dict.get("Prev") {
-            Some(Object::Integer(prev)) if *prev > 0 && (*prev as usize) < data.len() => {
+            Some(Object::Integer(prev)) if *prev > 0 && (*prev as u64) < data.len() as u64 => {
                 Ok(Some(*prev as u64))
             }
             _ => Ok(None),
@@ -323,7 +340,7 @@ impl XRefTable {
 
         let mut lexer = Lexer::new(&tail[last_match + b"startxref".len()..]);
         match lexer.next_token()? {
-            Some(Token::Integer(offset)) if offset >= 0 && (offset as usize) < data.len() => {
+            Some(Token::Integer(offset)) if offset >= 0 && (offset as u64) < data.len() as u64 => {
                 Ok(offset as u64)
             }
             _ => Err(Error::SyntaxError {
@@ -347,7 +364,10 @@ impl XRefTable {
 
             if let Token::Keyword("trailer") = tok1 {
                 // Parse trailer dictionary to extract /Prev and /Root
-                let abs_pos = base_offset + lexer.cursor();
+                let abs_pos = match base_offset.checked_add(lexer.cursor()) {
+                    Some(p) if p < data.len() => p,
+                    _ => break,
+                };
                 let mut parser = Parser::new(&data[abs_pos..]);
                 if let Ok(Some(Object::Dictionary(dict))) = parser.parse_object() {
                     let mut trailer_map = BTreeMap::new();
@@ -381,7 +401,13 @@ impl XRefTable {
                             message: "xref subsection entry count exceeds file size",
                         });
                     }
-                    let first = first_id.max(0) as u32;
+                    if first_id < 0 || first_id > u32::MAX as i64 {
+                        return Err(Error::SyntaxError {
+                            offset: lexer.cursor(),
+                            message: "Invalid first object id in xref subsection",
+                        });
+                    }
+                    let first = first_id as u32;
                     let count = num_entries as u32;
                     for current_id in first..(first.saturating_add(count)) {
                         let offset = match lexer.next_token()? {
@@ -394,7 +420,11 @@ impl XRefTable {
                             }
                         };
                         let gen = match lexer.next_token()? {
-                            Some(Token::Integer(val)) => val as u16,
+                            Some(Token::Integer(val))
+                                if val >= 0 && val <= u16::MAX as i64 =>
+                            {
+                                val as u16
+                            }
                             _ => {
                                 return Err(Error::SyntaxError {
                                     offset: lexer.cursor(),
@@ -419,7 +449,7 @@ impl XRefTable {
                             table.insert(
                                 current_id,
                                 XRefEntry::Free {
-                                    next_free_id: offset as u32,
+                                    next_free_id: u32::try_from(offset).unwrap_or(u32::MAX),
                                     gen,
                                 },
                             );

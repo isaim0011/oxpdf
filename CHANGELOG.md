@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-10-01
+
+### Added
+- **Content Stream Parsing Engine** (`src/content/`):
+  - Dedicated `ContentLexer` (`src/content/lexer.rs`) tuned specifically for graphics, paths, matrices, and text operator syntax.
+  - Zero-allocation parsing for coordinates, single/double character operators (`cm`, `re`, `m`, `l`, `BT`, `ET`, `Tj`, `TJ`, `q`, `Q`), and inline images (`BI`..`ID`..`EI`).
+  - Comprehensive operator parser (`ContentParser`) yielding structured `Operation<'a>` token streams.
+- **Unicode Plaintext Text Extraction** (`src/text.rs`):
+  - Decodes Latin-script encodings: `WinAnsiEncoding`, `StandardEncoding`, `MacRomanEncoding`, and `PdfDocEncoding`.
+  - Full Unicode support for UTF-16BE and UTF-16LE strings with byte-order marks (`\xFE\xFF` and `\xFF\xFE`).
+  - Font kerning displacement extraction: converts negative coordinate shifts in `TJ` arrays ($\le -100$) into proper natural word spacing.
+  - Public `Document::extract_text(page_id)` and `Document::extract_text_all()` API methods.
+- **Source Abstraction Layer** (`src/source.rs`):
+  - `PdfSource` trait decoupling engine operations from physical storage.
+  - `MmapSource` offloading virtual memory to the OS kernel page cache, enabling processing of multi-gigabyte PDFs with bounded physical RAM (<32 MB).
+  - `BufferSource` zero-copy memory slice wrapper for in-memory and WASM environments.
+- **Fault-Tolerant Reconstruction** (`src/recover.rs`):
+  - PDFium/Chromium-inspired forward linear scanning engine for documents with truncated, shifted, or severed cross-reference tables.
+  - Auto-synthesizes minimal trailer and `/Type /Catalog` pointers when structural trailers are destroyed.
+  - `Document::load()` automatically attempts repair on structural failure, while `Document::load_strict()` enforces strict ISO 32000-1 compliance.
+- **Empirical Benchmarks & System Design Specs**:
+  - `BENCHMARKS.md`: Head-to-head empirical metrics across 5,820 corpus files; Criterion micro-benchmarks; RSS memory profiling demonstrating 99.04x speedup over `lopdf`.
+  - `DESIGN.md`: Formal L0–L6 pipeline specifications, memory streaming models, and verbatim §9 permanent scope exclusion guarantees.
+- **Adversarial Security Test Suite** (`tests/security_audit.rs`):
+  - 15 hostile security tests verifying immunity to circular page trees, decompression bombs, integer overflows, cyclic object streams, and adversarial `/Length` bounds.
+
+### Changed
+- Promoted `oxpdf` to official **v1.0.0** stable release with full semantic stability guarantees.
+- Replaced all unchecked arithmetic operations in `document.rs`, `writer.rs`, `recover.rs`, and `xref.rs` with `checked_add` and strict boundary guards.
+- Expanded octal escape parsing accumulator to `u16` with modulo-256 masking to eliminate debug-mode overflow panics per ISO 32000-1 §7.3.4.2.
+- Hardened ASCII-Hex and ASCII-85 stream decompressors to enforce the 256 MB maximum decompression limit.
+
+### Performance
+- **Throughput**: 2,348.62 MB/s (42,748 files/sec) across 5,820 corpus documents (**99.04x faster than lopdf**).
+- **Latency**: $p_{50}$ = 0.007 ms, $p_{90}$ = 0.030 ms, $p_{99}$ = 0.159 ms.
+- **Memory**: 108 KB net parser heap delta on a 10.87 MB document (**100.5x less memory than lopdf**).
+- **Corpus Verification**: 0 panics across 5,820 files.
+
 ## [0.4.0] - 2026-09-29
 
 ### Fixed

@@ -125,7 +125,10 @@ impl<W: Write> Serializer<W> {
         self.writer
             .write_all(bytes)
             .map_err(|e| Error::Io(e.to_string()))?;
-        self.bytes_written += bytes.len() as u64;
+        self.bytes_written = self
+            .bytes_written
+            .checked_add(bytes.len() as u64)
+            .ok_or_else(|| Error::Unsupported("file size overflow"))?;
         Ok(())
     }
 }

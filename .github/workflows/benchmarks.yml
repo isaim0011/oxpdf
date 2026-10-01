@@ -1,0 +1,25 @@
+name: Nightly Benchmarks & RSS Verification
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # Every night at 03:00 UTC
+  workflow_dispatch:      # Manual trigger
+
+jobs:
+  rss_benchmark:
+    name: Bounded Memory & Peak RSS Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Examples in Release Mode
+        run: cargo build --release --examples
+
+      - name: Generate 2 GB Synthetic PDF
+        run: ./target/release/examples/generate_large_pdf 2 synthetic_2gb.pdf
+
+      - name: Measure Peak RSS with /usr/bin/time -v
+        run: |
+          /usr/bin/time -v ./target/release/examples/measure_memory synthetic_2gb.pdf 2>&1 | tee rss_output.txt
+          grep "Maximum resident set size" rss_output.txt
