@@ -35,19 +35,28 @@ A ground-up plan: PDF binary fundamentals → working engine → benchmarked, te
 
 ## Phase 3 — Testing & Quality Infrastructure
 
-- [x] Unit tests per module (lexer, parser, xref, stream, writer, document) — 12 tests, 0 failures
-- [x] Criterion benchmark harness (`benches/lexer_bench.rs`)
+- [x] Unit tests per module (lexer, parser, xref, stream, writer, document, content, text) — 52 tests, 0 failures
+- [x] Criterion benchmark harness (`benches/lexer_bench.rs`, `benches/corpus_bench.rs`)
 - [x] GitHub Actions automated format and clippy quality gates (`-D warnings`)
-- [~] Public test corpora regression harness (veraPDF / pdf.js suite) — harness built, first run in progress
-- [ ] `cargo fuzz` integration for adversarial input hardening
+- [x] Public test corpora regression harness (5,820 real-world files) — 99.93% pass rate, 0 panics
+- [ ] `cargo fuzz` continuous fuzzing integration for adversarial input hardening
 
 ---
 
 ## Phase 4 — Documentation & Release Discipline
 
-- [x] SemVer release pipeline (`v0.1.0`, `v0.2.0`, `v0.3.0` on crates.io)
+- [x] SemVer release pipeline (`v1.0.0` live on crates.io)
 - [x] `CHANGELOG.md` following Keep a Changelog
-- [x] `README.md` with honest status table and known limitations section
+- [x] `README.md` with verified benchmarks, status table, and explicit scope boundaries
 - [x] Dual-verification maintainer protocol (`oxpdf-maintainer` skill)
-- [ ] Architecture design document (`DESIGN.md`)
-- [ ] Real-world benchmark report (`BENCHMARKS.md`) with measured corpus pass rate
+- [x] Architecture design document (`DESIGN.md` L0–L6 pipeline & §9 exclusions)
+- [x] Real-world benchmark report (`BENCHMARKS.md` head-to-head vs lopdf)
+
+---
+
+## Phase 5 — Satellite Crates & Future Horizons
+
+- [ ] **`oxpdf-cli`**: Lightweight command-line binary (`inspect`, `extract-text`, `pack`, `bench`)
+- [ ] **`oxpdf-wasm`**: Dedicated `wasm-bindgen` satellite package with OPFS & zero-copy Uint8Array interop
+- [ ] **CID & `/ToUnicode` CMaps**: Text extraction support for composite TrueType / Type 0 CJK fonts
+- [ ] **Stage B Portable SIMD Lexer**: `core::simd` 32-byte chunk classification under `simd` feature gate
