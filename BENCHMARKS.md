@@ -15,7 +15,7 @@
 | **Rust Toolchain** | `rustc 1.98.1` (`x86_64-pc-windows-gnu`), commit `48a229cea` |
 | **LLVM Backend** | LLVM 22.1.8 |
 | **Cargo Build Profile** | `[profile.release]` `opt-level = 3`, `lto = "thin"`, `codegen-units = 1`, `panic = "abort"`, `strip = true` |
-| **Benchmark Targets** | `oxpdf v0.4.0` vs `lopdf v0.36.0` |
+| **Benchmark Targets** | `oxpdf v1.0.1` vs `lopdf v0.36.0` |
 
 ---
 
@@ -48,7 +48,7 @@ The evaluation uses the standard reference corpora specified in §6:
 
 Empirical comparative benchmark between `oxpdf` and `lopdf` on the complete 5,820-file corpus (319.75 MB total data):
 
-| Benchmark Metric | `oxpdf v0.4.0` | `lopdf v0.36.0` | Comparative Advantage |
+| Benchmark Metric | `oxpdf v1.0.1` | `lopdf v0.36.0` | Comparative Advantage |
 |---|---|---|---|
 | **Throughput (MB/s)** | **2,348.62 MB/s** | 23.71 MB/s | **99.04x faster** |
 | **Parsing Speed** | **42,748.4 files/sec** | 431.6 files/sec | **99.04x faster** |
@@ -73,7 +73,7 @@ Empirical comparative benchmark between `oxpdf` and `lopdf` on the complete 5,82
 ========================================================================================
 Engine            Throughput      Files/sec    p50 (Median)   p90 Latency   p99 Latency
 ----------------------------------------------------------------------------------------
-oxpdf v0.4.0      2,348.62 MB/s   42,748.4/s   0.007 ms       0.030 ms      0.159 ms
+oxpdf v1.0.1      2,348.62 MB/s   42,748.4/s   0.007 ms       0.030 ms      0.159 ms
 lopdf v0.36.0        23.71 MB/s      431.6/s   0.227 ms       0.923 ms      6.968 ms
 ----------------------------------------------------------------------------------------
 Delta (Speedup)          99.04x       99.04x     32.91x         30.76x        43.96x
@@ -84,7 +84,7 @@ Delta (Speedup)          99.04x       99.04x     32.91x         30.76x        43
 - **Total Files**: 2,910
 - **Total Volume**: 159.88 MB (167,643,457 bytes)
 
-| Metric | `oxpdf v0.4.0` | `lopdf v0.36.0` | Ratio |
+| Metric | `oxpdf v1.0.1` | `lopdf v0.36.0` | Ratio |
 |---|---|---|---|
 | **Wall Duration** | **0.085 s** | 8.833 s | **103.9x faster** |
 | **Throughput** | **1,878.52 MB/s** | 18.10 MB/s | **103.79x** |
@@ -118,7 +118,7 @@ Evaluated on `veraPDF test suite 6-3-1-t01-pass-d.pdf` (**10.87 MB**, 10,873,240
 +---------------------------------------------------------------------------------------+
 | Engine        | Baseline Buffer RSS | Peak Working Set | Net Parser Heap Delta | Time |
 +---------------+---------------------+------------------+-----------------------+------+
-| oxpdf v0.4.0  | 14.08 MB (14,080 KB)| 14.19 MB (14,188)| 108 KB (0.10 MB)      |0.22ms|
+| oxpdf v1.0.1  | 14.08 MB (14,080 KB)| 14.19 MB (14,188)| 108 KB (0.10 MB)      |0.22ms|
 | lopdf v0.36.0 | 14.10 MB (14,104 KB)| 24.38 MB (24,960)| 10,856 KB (10.60 MB)  |8.94ms|
 +---------------+---------------------+------------------+-----------------------+------+
 | Advantage     |                     |                  | 100.5x lower memory   |39.9x |
