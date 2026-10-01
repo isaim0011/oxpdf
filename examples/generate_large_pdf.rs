@@ -15,7 +15,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         format!("synthetic_{}gb.pdf", size_gb)
     };
 
-    println!("Generating synthetic {} GB PDF at `{}`...", size_gb, target_path);
+    println!(
+        "Generating synthetic {} GB PDF at `{}`...",
+        size_gb, target_path
+    );
 
     let file = File::create(&target_path)?;
     let mut writer = BufWriter::with_capacity(1024 * 1024, file);
@@ -65,11 +68,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ser.write_bytes(format!("{:010} 00000 n \r\n", off).as_bytes())?;
     }
 
-    ser.write_bytes(format!(
-        "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF",
-        offsets.len() + 1,
-        xref_offset
-    ).as_bytes())?;
+    ser.write_bytes(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF",
+            offsets.len() + 1,
+            xref_offset
+        )
+        .as_bytes(),
+    )?;
 
     writer.flush()?;
     println!("Successfully generated synthetic {} GB PDF.", size_gb);

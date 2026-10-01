@@ -484,9 +484,9 @@ mod tests {
         let mut lexer = ContentLexer::new(input);
 
         let expected = [
-            "BT", "ET", "Tf", "Tj", "TJ", "cm", "re", "m", "l", "c", "v", "y", "h", "f", "F",
-            "f*", "S", "s", "B", "B*", "b", "b*", "W", "W*", "q", "Q", "rg", "RG", "k", "K",
-            "cs", "CS", "gs", "'", "\"", "T*",
+            "BT", "ET", "Tf", "Tj", "TJ", "cm", "re", "m", "l", "c", "v", "y", "h", "f", "F", "f*",
+            "S", "s", "B", "B*", "b", "b*", "W", "W*", "q", "Q", "rg", "RG", "k", "K", "cs", "CS",
+            "gs", "'", "\"", "T*",
         ];
 
         for op in expected {
@@ -508,9 +508,7 @@ mod tests {
         assert_eq!(lexer.next_token().unwrap(), Some(Token::Name("F1")));
         assert_eq!(
             lexer.next_token().unwrap(),
-            Some(Token::String(SmallVec::from_slice(
-                b"Hello (nested) World"
-            )))
+            Some(Token::String(SmallVec::from_slice(b"Hello (nested) World")))
         );
         assert_eq!(
             lexer.next_token().unwrap(),

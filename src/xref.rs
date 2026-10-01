@@ -76,12 +76,8 @@ impl XRefTable {
 
             match lexer.next_token()? {
                 Some(Token::Keyword("xref")) => {
-                    let next_prev = Self::parse_xref_subsections(
-                        &mut lexer,
-                        &mut table,
-                        data,
-                        cur_usize,
-                    )?;
+                    let next_prev =
+                        Self::parse_xref_subsections(&mut lexer, &mut table, data, cur_usize)?;
                     match next_prev {
                         Some(prev) => current_offset = prev,
                         None => break,
@@ -216,10 +212,13 @@ impl XRefTable {
                 .chunks(2)
                 .filter_map(|chunk| {
                     if chunk.len() == 2 {
-                        if let (Object::Integer(start), Object::Integer(count)) = (&chunk[0], &chunk[1])
+                        if let (Object::Integer(start), Object::Integer(count)) =
+                            (&chunk[0], &chunk[1])
                         {
                             if *start >= 0 && *count >= 0 {
-                                if let (Ok(s), Ok(c)) = (u32::try_from(*start), u32::try_from(*count)) {
+                                if let (Ok(s), Ok(c)) =
+                                    (u32::try_from(*start), u32::try_from(*count))
+                                {
                                     return Some((s, c));
                                 }
                             }
@@ -235,7 +234,10 @@ impl XRefTable {
         let mut pos = 0usize;
         for (start_id, count) in &index_ranges {
             for i in 0..*count {
-                if pos.checked_add(entry_size).map_or(true, |end| end > decoded.len()) {
+                if pos
+                    .checked_add(entry_size)
+                    .map_or(true, |end| end > decoded.len())
+                {
                     break;
                 }
                 let obj_id = match start_id.checked_add(i) {
@@ -420,9 +422,7 @@ impl XRefTable {
                             }
                         };
                         let gen = match lexer.next_token()? {
-                            Some(Token::Integer(val))
-                                if val >= 0 && val <= u16::MAX as i64 =>
-                            {
+                            Some(Token::Integer(val)) if val >= 0 && val <= u16::MAX as i64 => {
                                 val as u16
                             }
                             _ => {

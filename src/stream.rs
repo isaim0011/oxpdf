@@ -52,9 +52,7 @@ impl<'a> StreamView<'a> {
     /// Returns `Error::Unsupported` if decompressed size exceeds `MAX_DECOMPRESS_BYTES`.
     pub fn decode(&self) -> Result<Vec<u8>> {
         if self.raw_data.len() > Self::MAX_DECOMPRESS_BYTES {
-            return Err(Error::Unsupported(
-                "stream exceeds 256 MB safety limit",
-            ));
+            return Err(Error::Unsupported("stream exceeds 256 MB safety limit"));
         }
 
         if self.filters.is_empty()

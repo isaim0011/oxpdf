@@ -227,7 +227,8 @@ impl<'a> Document<'a> {
                 r.parse::<u32>().ok().or_else(|| {
                     if let Some(idx) = r.find("id: ") {
                         let sub = &r[idx + 4..];
-                        let digits: String = sub.chars().take_while(|c| c.is_ascii_digit()).collect();
+                        let digits: String =
+                            sub.chars().take_while(|c| c.is_ascii_digit()).collect();
                         digits.parse::<u32>().ok()
                     } else {
                         None

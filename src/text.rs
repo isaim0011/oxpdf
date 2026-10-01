@@ -632,10 +632,7 @@ fn parse_filter_name(name: &str) -> Result<FilterKind> {
 }
 
 /// Decompresses stream payload based on its dictionary metadata.
-fn decompress_stream(
-    dict: &BTreeMap<Cow<'_, str>, Object<'_>>,
-    data: &[u8],
-) -> Result<Vec<u8>> {
+fn decompress_stream(dict: &BTreeMap<Cow<'_, str>, Object<'_>>, data: &[u8]) -> Result<Vec<u8>> {
     let filters = extract_stream_filters(dict)?;
     let mut view = StreamView::new(data);
     for f in filters {
@@ -840,7 +837,10 @@ mod tests {
     fn test_encoding_decoders() {
         // UTF-16BE BOM \xFE\xFF
         let utf16be_bytes = [0xFE, 0xFF, 0x00, 0x48, 0x00, 0x69, 0x00, 0x21];
-        assert_eq!(decode_text(&utf16be_bytes, FontEncoding::WinAnsiEncoding), "Hi!");
+        assert_eq!(
+            decode_text(&utf16be_bytes, FontEncoding::WinAnsiEncoding),
+            "Hi!"
+        );
 
         // WinAnsi Euro & TM
         let winansi = [0x80, 0x20, 0x99];
@@ -848,7 +848,10 @@ mod tests {
 
         // MacRoman German & umlauts
         let macroman = [0x80, 0x81, 0x82];
-        assert_eq!(decode_text(&macroman, FontEncoding::MacRomanEncoding), "ÄÅÇ");
+        assert_eq!(
+            decode_text(&macroman, FontEncoding::MacRomanEncoding),
+            "ÄÅÇ"
+        );
 
         // StandardEncoding cent & sterling
         let standard = [0xA2, 0xA3];
@@ -895,9 +898,13 @@ mod tests {
             b"2 0 obj\n<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R 6 0 R] /Count 4 >>\nendobj\n",
         );
         // Object 3: Page 1 with single Tj stream
-        pdf.extend_from_slice(b"3 0 obj\n<< /Type /Page /Parent 2 0 R /Contents 7 0 R >>\nendobj\n");
+        pdf.extend_from_slice(
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /Contents 7 0 R >>\nendobj\n",
+        );
         // Object 4: Page 2 with TJ kerning stream
-        pdf.extend_from_slice(b"4 0 obj\n<< /Type /Page /Parent 2 0 R /Contents 8 0 R >>\nendobj\n");
+        pdf.extend_from_slice(
+            b"4 0 obj\n<< /Type /Page /Parent 2 0 R /Contents 8 0 R >>\nendobj\n",
+        );
         // Object 5: Page 3 with multi-stream contents array
         pdf.extend_from_slice(
             b"5 0 obj\n<< /Type /Page /Parent 2 0 R /Contents [9 0 R 10 0 R] >>\nendobj\n",

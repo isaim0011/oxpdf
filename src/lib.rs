@@ -23,4 +23,3 @@ pub use text::{decode_text, FontEncoding, TextExtractor};
 pub use types::Object;
 pub use writer::Serializer;
 pub use xref::{XRefEntry, XRefTable};
-

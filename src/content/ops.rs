@@ -313,11 +313,7 @@ impl<'a> Operation<'a> {
     pub fn into_owned(self) -> Operation<'static> {
         Operation {
             operator: self.operator,
-            operands: self
-                .operands
-                .into_iter()
-                .map(Object::into_owned)
-                .collect(),
+            operands: self.operands.into_iter().map(Object::into_owned).collect(),
         }
     }
 }
@@ -383,7 +379,11 @@ impl<'a> ContentParser<'a> {
         self.parse_object_from_token_depth(token, 0)
     }
 
-    fn parse_object_from_token_depth(&mut self, token: Token<'a>, depth: usize) -> Result<Object<'a>> {
+    fn parse_object_from_token_depth(
+        &mut self,
+        token: Token<'a>,
+        depth: usize,
+    ) -> Result<Object<'a>> {
         if depth > 64 {
             return Err(Error::RecursionLimitExceeded(64));
         }
@@ -426,7 +426,10 @@ impl<'a> ContentParser<'a> {
         Ok(items)
     }
 
-    fn parse_dictionary_depth(&mut self, depth: usize) -> Result<BTreeMap<Cow<'a, str>, Object<'a>>> {
+    fn parse_dictionary_depth(
+        &mut self,
+        depth: usize,
+    ) -> Result<BTreeMap<Cow<'a, str>, Object<'a>>> {
         let mut dict = BTreeMap::new();
         while let Some(token) = self.lexer.next_token()? {
             match token {
@@ -542,9 +545,7 @@ mod tests {
         let op_names: Vec<&str> = ops.iter().map(|o| o.operator.as_str()).collect();
         assert_eq!(
             op_names,
-            vec![
-                "q", "cm", "rg", "re", "f", "RG", "w", "m", "l", "l", "l", "h", "S", "Q"
-            ]
+            vec!["q", "cm", "rg", "re", "f", "RG", "w", "m", "l", "l", "l", "h", "S", "Q"]
         );
 
         // Verify cm operands
@@ -574,10 +575,7 @@ mod tests {
         let ops = parser.parse().unwrap();
 
         let op_names: Vec<&str> = ops.iter().map(|o| o.operator.as_str()).collect();
-        assert_eq!(
-            op_names,
-            vec!["BT", "Tm", "Tj", "T*", "'", "\"", "ET"]
-        );
+        assert_eq!(op_names, vec!["BT", "Tm", "Tj", "T*", "'", "\"", "ET"]);
 
         // Verify quote (') operation: 1 string operand
         assert_eq!(ops[4].operator, Operator::Quote);
@@ -637,7 +635,11 @@ mod tests {
 
     #[test]
     fn test_operator_display_and_roundtrip() {
-        let names = ["BT", "ET", "Tj", "TJ", "cm", "re", "m", "l", "c", "v", "y", "h", "f", "F", "f*", "S", "s", "B", "B*", "b", "b*", "W", "W*", "q", "Q", "rg", "RG", "k", "K", "cs", "CS", "gs", "'", "\"", "T*", "customOp"];
+        let names = [
+            "BT", "ET", "Tj", "TJ", "cm", "re", "m", "l", "c", "v", "y", "h", "f", "F", "f*", "S",
+            "s", "B", "B*", "b", "b*", "W", "W*", "q", "Q", "rg", "RG", "k", "K", "cs", "CS", "gs",
+            "'", "\"", "T*", "customOp",
+        ];
         for name in names {
             let op = Operator::from_str_name(name);
             assert_eq!(op.as_str(), name);

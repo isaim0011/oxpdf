@@ -65,7 +65,9 @@ impl RunMetrics {
             let avg = sum / count as f64;
             let p50 = sorted_times[count * 50 / 100];
             let p90 = sorted_times[(count as f64 * 0.90) as usize % count];
-            let p99 = sorted_times[((count as f64 * 0.99).ceil() as usize).saturating_sub(1).min(count - 1)];
+            let p99 = sorted_times[((count as f64 * 0.99).ceil() as usize)
+                .saturating_sub(1)
+                .min(count - 1)];
             (min, max, avg, p50, p90, p99)
         } else {
             (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -74,18 +76,27 @@ impl RunMetrics {
         println!("------------------------------------------------------------");
         println!("Engine:               {}", self.engine_name);
         println!("Total files scanned:  {}", self.total_files);
-        println!("Total volume:         {:.2} MB ({} bytes)", mb_total, self.total_bytes);
+        println!(
+            "Total volume:         {:.2} MB ({} bytes)",
+            mb_total, self.total_bytes
+        );
         println!("Wall-clock duration:  {:.3} s", self.total_time_secs);
         println!("Passed:               {} ({:.1}%)", self.passed, pass_pct);
         println!("Failed:               {} ({:.1}%)", self.failed, fail_pct);
         println!("Panics:               {}", self.panics);
-        println!("Throughput:           {:.2} MB/s | {:.1} files/sec", throughput_mb_s, throughput_files_s);
+        println!(
+            "Throughput:           {:.2} MB/s | {:.1} files/sec",
+            throughput_mb_s, throughput_files_s
+        );
         println!("Latency (min / avg):  {:.3} ms / {:.3} ms", min_ms, avg_ms);
         println!("Latency p50 (median): {:.3} ms", p50);
         println!("Latency p90:          {:.3} ms", p90);
         println!("Latency p99:          {:.3} ms", p99);
         println!("Latency max:          {:.3} ms", max_ms);
-        println!("Peak Process RSS:     {:.2} MB", self.peak_rss_kb as f64 / 1024.0);
+        println!(
+            "Peak Process RSS:     {:.2} MB",
+            self.peak_rss_kb as f64 / 1024.0
+        );
         if !self.largest_file_name.is_empty() {
             println!(
                 "Largest File:         {} ({:.2} MB)",
@@ -93,7 +104,10 @@ impl RunMetrics {
                 self.largest_file_bytes as f64 / (1024.0 * 1024.0)
             );
             println!("Largest File Latency: {:.2} ms", self.largest_file_time_ms);
-            println!("Largest File RSS:     {:.2} MB", self.largest_file_rss_kb as f64 / 1024.0);
+            println!(
+                "Largest File RSS:     {:.2} MB",
+                self.largest_file_rss_kb as f64 / 1024.0
+            );
         }
         if !self.failures_by_type.is_empty() {
             println!("\nTop Failure Categories:");
@@ -222,8 +236,8 @@ fn run_engine_benchmark(
         let rss_before = if is_largest { get_peak_rss_kb() } else { 0 };
 
         let t0 = Instant::now();
-        let parse_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            match engine {
+        let parse_result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match engine {
                 Engine::Oxpdf => {
                     let doc = OxDocument::load(data).map_err(|e| format!("{:?}", e))?;
                     let _ = doc.object_count();
@@ -234,8 +248,7 @@ fn run_engine_benchmark(
                     let _ = doc.objects.len();
                     Ok::<(), String>(())
                 }
-            }
-        }));
+            }));
         let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
         metrics.load_times_ms.push(elapsed_ms);
 
@@ -266,13 +279,21 @@ fn run_engine_benchmark(
                 let short_err = err_msg.lines().next().unwrap_or("UnknownError").to_string();
                 *metrics.failures_by_type.entry(short_err).or_insert(0) += 1;
                 if verbose {
-                    println!("[FAIL] {:<50} in {:>8.2} ms: {}", file.display(), elapsed_ms, err_msg);
+                    println!(
+                        "[FAIL] {:<50} in {:>8.2} ms: {}",
+                        file.display(),
+                        elapsed_ms,
+                        err_msg
+                    );
                 }
             }
             Err(_) => {
                 metrics.panics += 1;
                 metrics.failed += 1;
-                *metrics.failures_by_type.entry("Panic".to_string()).or_insert(0) += 1;
+                *metrics
+                    .failures_by_type
+                    .entry("Panic".to_string())
+                    .or_insert(0) += 1;
                 if verbose {
                     println!("[PANIC] {:<50}", file.display());
                 }
@@ -284,11 +305,7 @@ fn run_engine_benchmark(
     metrics
 }
 
-fn run_engine_cold(
-    engine: Engine,
-    pdf_files: &[PathBuf],
-    verbose: bool,
-) -> RunMetrics {
+fn run_engine_cold(engine: Engine, pdf_files: &[PathBuf], verbose: bool) -> RunMetrics {
     let engine_name = match engine {
         Engine::Oxpdf => "oxpdf (v0.4.0) [Cold]",
         Engine::Lopdf => "lopdf (v0.36.0) [Cold]",
@@ -301,8 +318,8 @@ fn run_engine_cold(
 
     for file in pdf_files {
         let t0 = Instant::now();
-        let parse_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            match engine {
+        let parse_result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match engine {
                 Engine::Oxpdf => {
                     let data = fs::read(file).map_err(|e| format!("{:?}", e))?;
                     let doc = OxDocument::load(&data).map_err(|e| format!("{:?}", e))?;
@@ -315,8 +332,7 @@ fn run_engine_cold(
                     let _ = doc.objects.len();
                     Ok::<usize, String>(data.len())
                 }
-            }
-        }));
+            }));
         let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
         metrics.load_times_ms.push(elapsed_ms);
 
@@ -341,7 +357,10 @@ fn run_engine_cold(
             Err(_) => {
                 metrics.panics += 1;
                 metrics.failed += 1;
-                *metrics.failures_by_type.entry("Panic".to_string()).or_insert(0) += 1;
+                *metrics
+                    .failures_by_type
+                    .entry("Panic".to_string())
+                    .or_insert(0) += 1;
             }
         }
     }
@@ -430,7 +449,10 @@ fn main() {
             lopdf_metrics = Some(m);
         }
     } else {
-        println!("Pre-loading {} files into memory (warm cache)...", pdf_files.len());
+        println!(
+            "Pre-loading {} files into memory (warm cache)...",
+            pdf_files.len()
+        );
         let preload_start = Instant::now();
         let mut preloaded_data = Vec::with_capacity(pdf_files.len());
         let mut total_bytes = 0u64;
@@ -480,7 +502,11 @@ fn main() {
 
         let ox_mb_s = (ox.total_bytes as f64 / (1024.0 * 1024.0)) / ox.total_time_secs;
         let lo_mb_s = (lo.total_bytes as f64 / (1024.0 * 1024.0)) / lo.total_time_secs;
-        let thrpt_ratio = if lo_mb_s > 0.0 { ox_mb_s / lo_mb_s } else { 0.0 };
+        let thrpt_ratio = if lo_mb_s > 0.0 {
+            ox_mb_s / lo_mb_s
+        } else {
+            0.0
+        };
 
         let ox_fps = ox.total_files as f64 / ox.total_time_secs;
         let lo_fps = lo.total_files as f64 / lo.total_time_secs;
@@ -490,17 +516,25 @@ fn main() {
         ox_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let ox_p50 = ox_sorted[ox_sorted.len() * 50 / 100];
         let ox_p90 = ox_sorted[(ox_sorted.len() as f64 * 0.90) as usize % ox_sorted.len()];
-        let ox_p99 = ox_sorted[((ox_sorted.len() as f64 * 0.99).ceil() as usize).saturating_sub(1).min(ox_sorted.len() - 1)];
+        let ox_p99 = ox_sorted[((ox_sorted.len() as f64 * 0.99).ceil() as usize)
+            .saturating_sub(1)
+            .min(ox_sorted.len() - 1)];
 
         let mut lo_sorted = lo.load_times_ms.clone();
         lo_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let lo_p50 = lo_sorted[lo_sorted.len() * 50 / 100];
         let lo_p90 = lo_sorted[(lo_sorted.len() as f64 * 0.90) as usize % lo_sorted.len()];
-        let lo_p99 = lo_sorted[((lo_sorted.len() as f64 * 0.99).ceil() as usize).saturating_sub(1).min(lo_sorted.len() - 1)];
+        let lo_p99 = lo_sorted[((lo_sorted.len() as f64 * 0.99).ceil() as usize)
+            .saturating_sub(1)
+            .min(lo_sorted.len() - 1)];
 
         let ox_rss_mb = ox.peak_rss_kb as f64 / 1024.0;
         let lo_rss_mb = lo.peak_rss_kb as f64 / 1024.0;
-        let rss_ratio = if ox_rss_mb > 0.0 { lo_rss_mb / ox_rss_mb } else { 0.0 };
+        let rss_ratio = if ox_rss_mb > 0.0 {
+            lo_rss_mb / ox_rss_mb
+        } else {
+            0.0
+        };
 
         println!(
             "{:<24} | {:>15.2} MB/s | {:>15.2} MB/s | {:>8.2}x",
@@ -512,15 +546,24 @@ fn main() {
         );
         println!(
             "{:<24} | {:>15.3} ms   | {:>15.3} ms   | {:>8.2}x",
-            "p50 Latency (median)", ox_p50, lo_p50, lo_p50 / ox_p50
+            "p50 Latency (median)",
+            ox_p50,
+            lo_p50,
+            lo_p50 / ox_p50
         );
         println!(
             "{:<24} | {:>15.3} ms   | {:>15.3} ms   | {:>8.2}x",
-            "p90 Latency", ox_p90, lo_p90, lo_p90 / ox_p90
+            "p90 Latency",
+            ox_p90,
+            lo_p90,
+            lo_p90 / ox_p90
         );
         println!(
             "{:<24} | {:>15.3} ms   | {:>15.3} ms   | {:>8.2}x",
-            "p99 Latency", ox_p99, lo_p99, lo_p99 / ox_p99
+            "p99 Latency",
+            ox_p99,
+            lo_p99,
+            lo_p99 / ox_p99
         );
         println!(
             "{:<24} | {:>15.2} MB   | {:>15.2} MB   | {:>8.2}x less",

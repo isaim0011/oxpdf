@@ -75,7 +75,7 @@ fn get_peak_rss_kb() -> usize {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let engine = args.get(1).map(|s| s.as_str()).unwrap_or("oxpdf");
-    
+
     // Find the largest file in corpus dynamically
     let mut files = Vec::new();
     collect_pdfs("corpus", &mut files);

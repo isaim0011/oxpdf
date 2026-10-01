@@ -13,7 +13,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let file = File::open(path)?;
     let source = MmapSource::open(&file)?;
-    println!("Mmap created successfully. File size: {:.2} MB", source.len() as f64 / (1024.0 * 1024.0));
+    println!(
+        "Mmap created successfully. File size: {:.2} MB",
+        source.len() as f64 / (1024.0 * 1024.0)
+    );
 
     let slice = source.as_slice()?;
     let doc = Document::load(slice)?;
