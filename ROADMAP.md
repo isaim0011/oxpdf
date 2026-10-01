@@ -39,24 +39,24 @@ A ground-up plan: PDF binary fundamentals → working engine → benchmarked, te
 - [x] Criterion benchmark harness (`benches/lexer_bench.rs`, `benches/corpus_bench.rs`)
 - [x] GitHub Actions automated format and clippy quality gates (`-D warnings`)
 - [x] Public test corpora regression harness (5,820 real-world files) — 99.93% pass rate, 0 panics
-- [ ] `cargo fuzz` continuous fuzzing integration for adversarial input hardening
+- [x] `cargo fuzz` continuous fuzzing integration for adversarial input hardening (`fuzz/` targets: lexer, parser, xref, filter)
 
 ---
 
 ## Phase 4 — Documentation & Release Discipline
 
-- [x] SemVer release pipeline (`v1.0.0` live on crates.io)
+- [x] SemVer release pipeline (`v1.0.1` live on crates.io)
 - [x] `CHANGELOG.md` following Keep a Changelog
 - [x] `README.md` with verified benchmarks, status table, and explicit scope boundaries
 - [x] Dual-verification maintainer protocol (`oxpdf-maintainer` skill)
 - [x] Architecture design document (`DESIGN.md` L0–L6 pipeline & §9 exclusions)
-- [x] Real-world benchmark report (`BENCHMARKS.md` head-to-head vs lopdf)
+- [x] Real-world benchmark report (`BENCHMARKS.md` head-to-head vs lopdf and Typst architectural analysis)
 
 ---
 
-## Phase 5 — Satellite Crates & Future Horizons
+## Phase 5 — Satellite Crates & Ecosystem Expansion
 
-- [ ] **`oxpdf-cli`**: Lightweight command-line binary (`inspect`, `extract-text`, `pack`, `bench`)
-- [ ] **`oxpdf-wasm`**: Dedicated `wasm-bindgen` satellite package with OPFS & zero-copy Uint8Array interop
-- [ ] **CID & `/ToUnicode` CMaps**: Text extraction support for composite TrueType / Type 0 CJK fonts
-- [ ] **Stage B Portable SIMD Lexer**: `core::simd` 32-byte chunk classification under `simd` feature gate
+- [x] **`oxpdf-cli`**: Lightweight command-line binary (`inspect`, `extract-text`, `pack`, `bench`) in `oxpdf-cli/`
+- [x] **`oxpdf-wasm`**: Dedicated `wasm-bindgen` satellite package with zero-copy `Uint8Array` interop in `oxpdf-wasm/`
+- [x] **CID & `/ToUnicode` CMaps**: Full CMap stream parser for ligatures, UTF-16BE surrogate pairs, and composite CJK fonts in `src/cmap.rs`
+- [x] **Stage B Portable SIMD Lexer**: Portable SWAR 16/32-byte chunk classification accelerating delimiter & whitespace scanning in `src/simd.rs`

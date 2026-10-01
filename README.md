@@ -16,29 +16,34 @@ For architectural specifications, see [DESIGN.md](DESIGN.md). For detailed empir
 
 ---
 
-## 🎯 Architecture & Implementation Status (v1.0.0)
+## 🎯 Architecture & Implementation Status (v1.0.1)
 
 | Feature | Status | Capability Details |
 |---|:---:|---|
 | **Zero-Copy Streaming Lexer** | ✅ Shipped | Borrows tokens directly from byte slices; `SmallVec<[u8; 32]>` inline buffers; `memchr`-accelerated scanning. |
+| **Stage B Portable SIMD Lexer** | ✅ Shipped | 16/32-byte chunked structural classification using fast SWAR bitmask vectorization on stable Rust. |
+| **/ToUnicode CMap Font Parser** | ✅ Shipped | Full Adobe CMap stream parser for UTF-16BE surrogate pairs, ligatures (`fi`, `fl`), and composite CJK fonts. |
 | **Bounded-Memory Object Lookup** | ✅ Shipped | `Document::load` indexes xref and trailers only. Random `get_object(id)` on demand. |
 | **Fault-Tolerant Xref Repair** | ✅ Shipped | PDFium-inspired forward linear reconstruction pass for broken, shifted, or severed xref tables. |
 | **Stack-Safe Parser** | ✅ Shipped | Depth-bounded recursive descent (max 256). Cycle detection on page trees and object streams. |
 | **Object Streams (`/ObjStm`)** | ✅ Shipped | PDF 1.5+ compressed object streams with interior index caching to prevent redundant decompression. |
 | **Binary XRef Streams** | ✅ Shipped | Full PDF 1.5+ binary XRef stream parsing (`/W` widths, `/Index` ranges, types 0/1/2, `/Prev` chains). |
 | **Content Stream Lexer & Ops** | ✅ Shipped | Dedicated `content::lexer` and `content::ops` parser for graphics, paths, matrices, and text operators. |
-| **Unicode Text Extraction** | ✅ Shipped | Latin encodings (WinAnsi, Standard, MacRoman, PdfDoc), UTF-16 BOM, kerning displacements, spacing. |
+| **Unicode Text Extraction** | ✅ Shipped | CMap resolution, Latin encodings (WinAnsi, Standard, MacRoman, PdfDoc), UTF-16 BOM, kerning. |
 | **Zero-Copy `PdfSource`** | ✅ Shipped | `MmapSource` (OS page cache offloading for 10GB+ files) and `BufferSource` for memory/WASM. |
 | **QPDF-Style Object Packing** | ✅ Shipped | `Document::write_packed()` packs objects into `/ObjStm` + binary XRef stream (30–70% size reduction). |
+| **`oxpdf-cli` CLI Tool** | ✅ Shipped | Standalone binary (`inspect`, `extract-text`, `pack`, `bench`) in `oxpdf-cli/`. |
+| **`oxpdf-wasm` WASM Bindings** | ✅ Shipped | Browser & edge WebAssembly bindings (`WasmDocument`) with zero-copy JS interop in `oxpdf-wasm/`. |
+| **Continuous Fuzzing (`fuzz/`)** | ✅ Shipped | `cargo-fuzz` integration with 4 dedicated `libfuzzer-sys` targets (lexer, parser, xref, filter). |
 | **Adversarial Security Hardening** | ✅ Shipped | Checked arithmetic, 256 MB decompression ceiling, recursion guards, bounds-safe slice indexing. |
 
 ---
 
 ## 📊 Head-to-Head Performance (5,820-File Benchmark)
 
-Empirical benchmark comparing `oxpdf v1.0.0` against `lopdf v0.36.0` on the complete 5,820-file reference corpus (319.75 MB total data):
+Empirical benchmark comparing `oxpdf v1.0.1` against `lopdf v0.36.0` on the complete 5,820-file reference corpus (319.75 MB total data):
 
-| Metric | `oxpdf v1.0.0` | `lopdf v0.36.0` | Advantage |
+| Metric | `oxpdf v1.0.1` | `lopdf v0.36.0` | Advantage |
 |---|---|---|---|
 | **Throughput (MB/s)** | **2,348.62 MB/s** | 23.71 MB/s | **99.04x faster** |
 | **Speed (files/sec)** | **42,748.4 /s** | 431.6 /s | **99.04x faster** |
@@ -59,14 +64,14 @@ Add `oxpdf` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-oxpdf = "1.0.0"
+oxpdf = "1.0.1"
 ```
 
 To enable memory-mapped file loading on native platforms (enabled by default):
 
 ```toml
 [dependencies]
-oxpdf = { version = "1.0.0", features = ["std"] }
+oxpdf = { version = "1.0.1", features = ["std"] }
 ```
 
 ---
@@ -164,6 +169,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+---
+
+## 🛰️ Satellite Crates & Ecosystem
+
+- **`oxpdf-cli`** (`oxpdf-cli/`): Lightweight, ultra-fast command-line tool.
+  ```bash
+  cargo install --path oxpdf-cli
+  oxpdf inspect document.pdf
+  oxpdf extract-text document.pdf --page 1
+  oxpdf pack bloated.pdf optimized.pdf
+  oxpdf bench /path/to/pdf/corpus
+  ```
+- **`oxpdf-wasm`** (`oxpdf-wasm/`): Zero-copy WebAssembly package for browser & edge environments (`wasm-bindgen`).
+- **`fuzz/`**: Continuous fuzzing suite with 4 `libfuzzer-sys` targets protecting lexer, parser, xref, and filters against untrusted inputs.
+
+---
+
+## 🤝 Typst & oxpdf: Ecosystem Positioning
+
+`oxpdf` and [Typst](https://github.com/typst/typst) address opposite, complementary directions of the PDF universe:
+
+| Dimension | Typst | oxpdf |
+|---|---|---|
+| **Pipeline Direction** | **Source $\to$ PDF** (Authoring & Typesetting) | **PDF $\to$ AST / Plaintext / Packed PDF** (Analysis & Ingestion) |
+| **Primary Domain** | Document compilation from markup syntax | Streaming parsing, random-access lookup, and fault recovery |
+| **Input Tolerances** | Strict Typst markup compiler rules | Ingests arbitrary, broken, truncated real-world PDF files |
+| **Memory Model** | Document layout model in memory | Strict memory bounding (<32 MB RAM) via streaming OS mmap |
+| **Synergy** | Clean, standards-compliant PDF generator | Upstream ingestion, PDF asset extraction, and embedding engine |
 
 ---
 

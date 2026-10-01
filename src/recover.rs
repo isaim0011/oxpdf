@@ -48,10 +48,20 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
         let mut tokens_with_pos = Vec::new();
 
         // Cap at 128 tokens as defense-in-depth against lexer runaway
-        while let Ok(Some(tok)) = lexer.next_token() {
-            tokens_with_pos.push((tok, lexer.cursor()));
-            if tokens_with_pos.len() > 128 {
-                break;
+        while !lexer.is_eof() {
+            match lexer.next_token() {
+                Ok(Some(tok)) => {
+                    tokens_with_pos.push((tok, lexer.cursor()));
+                    if tokens_with_pos.len() > 128 {
+                        break;
+                    }
+                }
+                Ok(None) => break,
+                Err(_) => {
+                    // Lookback slice may start at an arbitrary offset (e.g. midway through a token).
+                    // Skip the invalid character and continue scanning for <id> <gen> obj.
+                    continue;
+                }
             }
         }
 

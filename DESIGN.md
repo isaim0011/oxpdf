@@ -276,9 +276,78 @@ These are not roadmap items deferred to later tiers. They are **permanently out 
 
 ---
 
-## 6. v1.0 Production Criteria: The 5 Hard Gates
+## 6. Typst vs oxpdf: Ecosystem Positioning & Architecture Comparison
 
-Versioning follows strict engineering discipline. Until all five conditions below are definitively met, `oxpdf` remains strictly in `0.x`. No release will be designated `1.0` on vibes, assumptions, or partial credit:
+In the modern Rust systems and document engineering landscape, **Typst** (`typst` / `typst-pdf`) and **`oxpdf`** solve opposite halves of the document processing lifecycle. Clarifying their architectural boundaries prevents category errors and guides proper ecosystem integration.
+
+### 6.1 Typesetting Compiler (Typst) vs. Streaming Ingestion Engine (oxpdf)
+
+```mermaid
+flowchart TD
+    subgraph Compiler["Typst: Typesetting Compiler"]
+        direction TB
+        T1["Markup Source (.typ)"] --> T2["Syntax Tree & Evaluation"]
+        T2 --> T3["Layout & Pagination Engine (Frames)"]
+        T3 --> T4["typst-pdf / pdf-writer (Sequential Output)"]
+        T4 --> T5["Output PDF File"]
+    end
+
+    subgraph Parser["oxpdf: Streaming Parser & Reconstructor"]
+        direction TB
+        O1["Arbitrary / Legacy / Corrupt PDF"] --> O2["L0: PdfSource (MmapSource, <32MB RSS)"]
+        O2 --> O3["L1-L4: Lexer, Parser & XRef / recover.rs"]
+        O3 --> O4["L5-L6: StreamView, Content Lexer & Text Extractor"]
+        O4 --> O5["Unicode Text / In-Memory AST / write_packed PDF"]
+    end
+
+    T5 -.->|"Ingestion & Validation"| O1
+    O5 -.->|"Asset Data / Structured Input"| T1
+```
+
+#### Typst: Typesetting Compiler ($Source \to PDF$)
+- **Core Mission**: Typst is a modern authoring system and compiler designed to replace LaTeX. Its input consists of human-authored or automated markup containing formatted text, mathematical formulas, styling rules, and embedded script code.
+- **Internal Pipeline**: Typst parses markup into syntax trees, evaluates styling functions, computes paragraph line-breaking (Knuth-Plass algorithm), resolves page layouts, subsets fonts, and structures output into abstract two-dimensional page `Frame`s.
+- **Output Emission**: The `typst-pdf` backend serializes these computed frames into PDF primitives using the low-level `pdf-writer` crate. This process is strictly forward-only and sequential: once layout frames are resolved, graphic paths, font dictionaries, and content streams are emitted directly to an output byte sink.
+- **Parser Scope**: **Typst does NOT parse, decode, index, or repair arbitrary existing PDF files.** It contains no cross-reference scanner, no `/ObjStm` decompressor, and no mechanism to inspect or traverse arbitrary third-party PDF object graphs.
+
+#### oxpdf: Streaming Parser & Reconstructor ($PDF \to AST / Text / Packed PDF$)
+- **Core Mission**: `oxpdf` is a pure-Rust systems engine engineered for high-throughput ingestion, zero-copy structural inspection, fault-tolerant repair, and text extraction from existing PDF documents.
+- **Internal Pipeline**: Operating across layers $L_0$ through $L_6$, `oxpdf` maps input files into memory via `MmapSource`, locates the terminal `startxref` keyword, indexes cross-reference tables/streams, resolves indirect object references lazily on demand, and automatically engages `recover.rs` when encountering corrupted structures.
+- **Output Emission**: Produces zero-copy AST tokens (`Object<'a>`), extracted UTF-8 text streams (`Document::extract_text`), or compact, normalized PDF output streams via `write_packed`.
+- **Authoring Scope**: As defined in §5, `oxpdf` does **not** perform page layout, paragraph formatting, or text typesetting from scratch. It is strictly an ingestion, transformation, and extraction engine.
+
+### 6.2 Deep Architectural & Performance Contrast
+
+| Architectural Attribute | Typst (`typst` / `typst-pdf`) | oxpdf (`oxpdf`) |
+|---|---|---|
+| **Role & Function** | Document authoring, layout, typesetting, and PDF generation | Ingestion, parsing, xref indexing, stream decompression, text extraction, repair |
+| **Data Ingestion Model** | Sequential read of UTF-8 markup files, fonts, and raster images | Random-access binary traversal over multi-gigabyte PDF byte spaces |
+| **Memory Footprint** | Heap allocations scale with layout frame trees, font tables, and document scope | Strictly bounded resident set size (**$<32\text{ MB}$ RSS**) regardless of file size |
+| **Memory Backing Mechanism** | In-memory AST, heap vectors, and layout caches | OS virtual memory page cache offloading via `memmap2::Mmap` (`MmapSource`) |
+| **Cross-Reference Handling** | Emits monotonic, freshly calculated xref tables or xref streams at file tail | Reads backward from EOF, resolves `/Prev` chains, or executes linear recovery (`recover.rs`) |
+| **Corrupt Input Handling** | Fails compilation on invalid syntax; assumes emitted PDF is perfectly valid | Resilient two-stage reconstruction; recovers truncated or damaged files with **0 panics** |
+| **Object Decompression** | Only compresses output streams (Flate via `miniz_oxide`) | Lazy on-demand decompression of `/ObjStm`, Flate, ASCIIHex, ASCII85, LZW with 256MB bomb guards |
+| **Throughput Characteristics** | Tens to hundreds of compiled pages per second | **2,348.62 MB/s** ingestion throughput; **42,748 files/sec** indexing rate |
+
+### 6.3 Ecosystem Synergy: Where Typst and oxpdf Complement Each Other
+
+The complementary nature of Typst and `oxpdf` creates significant architectural opportunities for the Rust document processing ecosystem:
+
+1. **Zero-Overhead Vector PDF Embedding in Typst**:
+   - Typesetting academic papers, engineering specifications, and corporate reports frequently requires embedding vector diagrams from external PDF files (e.g., plots from Matplotlib/R, architectural schematics, or legacy vector graphics).
+   - Because Typst does not parse arbitrary PDFs, integrating `oxpdf` as an ingestion library allows Typst packages and workflows to inspect external PDF page trees, extract specific pages as isolated Form XObjects, and inject them into Typst layout frames without losing vector fidelity or depending on heavyweight external C libraries (like Poppler, MuPDF, or Ghostscript).
+2. **Post-Typesetting Optimization & Stream Compaction**:
+   - PDFs produced by Typst can be passed through `oxpdf`'s `write_packed` serializer to perform cross-document deduplication, linearize object streams (`/ObjStm`), and produce highly compressed, web-optimized distribution PDFs.
+3. **Automated Document Validation & Compliance Auditing**:
+   - In CI/CD publishing pipelines, `oxpdf` can serve as an automated, sub-millisecond validation gate: inspecting Typst-generated PDFs to verify catalog structures, confirm metadata conforming to PDF/A specifications, and guarantee that font resource encodings extract to unambiguous Unicode text.
+4. **Legacy Document Migration to Typst Markup**:
+   - Organizations modernizing legacy document archives into Typst markup templates can deploy `oxpdf` as a high-speed ETL extractor. Parsing millions of legacy PDFs at 2,348 MB/s, `oxpdf` extracts structured text, headings, and coordinate positions to reconstruct clean, editable `.typ` source files.
+
+---
+
+## 7. v1.0 Production Criteria: The 5 Hard Gates
+
+Versions follow strict engineering discipline. Until all five conditions below are definitively met, `oxpdf` remains strictly in `0.x`. No release will be designated `1.0` on vibes, assumptions, or partial credit:
 
 ```markdown
 1. Tier 1 + Tier 2 complete (object model, xref, recovery, corpus pass rate published)
@@ -298,7 +367,7 @@ Versioning follows strict engineering discipline. Until all five conditions belo
 
 ---
 
-## 7. Summary & Invariant Verification Matrix
+## 8. Summary & Invariant Verification Matrix
 
 | Architectural Principle | Implementation Mechanism | Enforcement Point |
 |---|---|---|

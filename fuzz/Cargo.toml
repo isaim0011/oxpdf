@@ -1,0 +1,46 @@
+[package]
+name = "oxpdf-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+oxpdf = { path = ".." }
+
+[target.'cfg(not(all(windows, target_env = "gnu")))'.dependencies]
+libfuzzer-sys = "0.4"
+
+[target.'cfg(all(windows, target_env = "gnu"))'.dependencies]
+libfuzzer-sys = { version = "0.4", default-features = false }
+
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "lexer"
+path = "fuzz_targets/lexer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "parser"
+path = "fuzz_targets/parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "xref"
+path = "fuzz_targets/xref.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "filter"
+path = "fuzz_targets/filter.rs"
+test = false
+doc = false

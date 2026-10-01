@@ -98,12 +98,20 @@ impl<'a> Lexer<'a> {
     }
 
     /// Fast-skips whitespace characters according to PDF specification ISO 32000-1 §7.2.2.
+    /// Accelerated via Stage B SIMD / SWAR chunked structural scanning.
     #[inline]
     pub fn skip_whitespace(&mut self) {
-        while self.pos < self.data.len() {
-            let b = self.data[self.pos];
-            if matches!(b, 0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20) {
-                self.pos += 1;
+        let advanced = crate::simd::find_non_whitespace(&self.data[self.pos..]);
+        self.pos += advanced;
+    }
+
+    /// Fast-skips alternating whitespace and comment lines.
+    #[inline]
+    pub fn skip_whitespace_and_comments(&mut self) {
+        loop {
+            self.skip_whitespace();
+            if self.pos < self.data.len() && self.data[self.pos] == b'%' {
+                self.skip_comment();
             } else {
                 break;
             }
@@ -112,45 +120,37 @@ impl<'a> Lexer<'a> {
 
     /// Fetches next token while skipping comments and whitespaces.
     pub fn next_token(&mut self) -> Result<Option<Token<'a>>> {
-        loop {
-            self.skip_whitespace();
-            if self.pos >= self.data.len() {
-                return Ok(None);
-            }
+        self.skip_whitespace_and_comments();
+        if self.pos >= self.data.len() {
+            return Ok(None);
+        }
 
-            let b = self.data[self.pos];
+        let b = self.data[self.pos];
 
-            // Comments
-            if b == b'%' {
-                self.skip_comment();
-                continue;
-            }
+        // Two-character delimiters: << and >>
+        if b == b'<' && self.peek_byte(1) == Some(b'<') {
+            self.pos += 2;
+            return Ok(Some(Token::DictOpen));
+        }
+        if b == b'>' && self.peek_byte(1) == Some(b'>') {
+            self.pos += 2;
+            return Ok(Some(Token::DictClose));
+        }
 
-            // Two-character delimiters: << and >>
-            if b == b'<' && self.peek_byte(1) == Some(b'<') {
-                self.pos += 2;
-                return Ok(Some(Token::DictOpen));
+        // Single character delimiters
+        match b {
+            b'[' => {
+                self.pos += 1;
+                return Ok(Some(Token::ArrayOpen));
             }
-            if b == b'>' && self.peek_byte(1) == Some(b'>') {
-                self.pos += 2;
-                return Ok(Some(Token::DictClose));
+            b']' => {
+                self.pos += 1;
+                return Ok(Some(Token::ArrayClose));
             }
-
-            // Single character delimiters
-            match b {
-                b'[' => {
-                    self.pos += 1;
-                    return Ok(Some(Token::ArrayOpen));
-                }
-                b']' => {
-                    self.pos += 1;
-                    return Ok(Some(Token::ArrayClose));
-                }
-                b'/' => return self.read_name().map(Some),
-                b'(' => return self.read_literal_string().map(Some),
-                b'<' => return self.read_hex_string().map(Some),
-                _ => return self.read_regular_token().map(Some),
-            }
+            b'/' => self.read_name().map(Some),
+            b'(' => self.read_literal_string().map(Some),
+            b'<' => self.read_hex_string().map(Some),
+            _ => self.read_regular_token().map(Some),
         }
     }
 
@@ -163,25 +163,24 @@ impl<'a> Lexer<'a> {
 
     fn skip_comment(&mut self) {
         self.pos += 1; // skip '%'
-        while self.pos < self.data.len() {
-            let b = self.data[self.pos];
-            self.pos += 1;
-            if b == b'\r' || b == b'\n' {
-                break;
+        if let Some(idx) = memchr::memchr2(b'\r', b'\n', &self.data[self.pos..]) {
+            self.pos += idx + 1;
+            if self.pos < self.data.len()
+                && self.data[self.pos - 1] == b'\r'
+                && self.data[self.pos] == b'\n'
+            {
+                self.pos += 1;
             }
+        } else {
+            self.pos = self.data.len();
         }
     }
 
     fn read_name(&mut self) -> Result<Token<'a>> {
         self.pos += 1; // skip '/'
         let start = self.pos;
-        while self.pos < self.data.len() {
-            let b = self.data[self.pos];
-            if Self::is_delimiter_or_ws(b) {
-                break;
-            }
-            self.pos += 1;
-        }
+        let advanced = crate::simd::find_delimiter_or_whitespace(&self.data[self.pos..]);
+        self.pos += advanced;
         let raw = &self.data[start..self.pos];
         let name_str = std::str::from_utf8(raw).map_err(|_| Error::SyntaxError {
             offset: start,
@@ -297,13 +296,8 @@ impl<'a> Lexer<'a> {
 
     fn read_regular_token(&mut self) -> Result<Token<'a>> {
         let start = self.pos;
-        while self.pos < self.data.len() {
-            let b = self.data[self.pos];
-            if Self::is_delimiter_or_ws(b) {
-                break;
-            }
-            self.pos += 1;
-        }
+        let advanced = crate::simd::find_delimiter_or_whitespace(&self.data[self.pos..]);
+        self.pos += advanced;
 
         // If cursor didn't advance, the current byte is an unrecognised delimiter
         // (e.g. a lone '>' that isn't part of '>>'). Advance past it and return
@@ -344,26 +338,10 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    #[inline]
-    fn is_delimiter_or_ws(b: u8) -> bool {
-        matches!(
-            b,
-            0x00 | 0x09
-                | 0x0A
-                | 0x0C
-                | 0x0D
-                | 0x20
-                | b'('
-                | b')'
-                | b'<'
-                | b'>'
-                | b'['
-                | b']'
-                | b'{'
-                | b'}'
-                | b'/'
-                | b'%'
-        )
+    #[allow(dead_code)]
+    #[inline(always)]
+    pub fn is_delimiter_or_ws(b: u8) -> bool {
+        crate::simd::is_delimiter_or_ws(b)
     }
 }
 
@@ -448,5 +426,43 @@ mod tests {
             }
             assert!(count < 1000, "lexer did not terminate on lone '>' sequence");
         }
+    }
+
+    /// Test skip_whitespace and skip_whitespace_and_comments across chunk boundaries.
+    #[test]
+    fn test_skip_whitespace_and_comments_chunked() {
+        let input = b"   \r\n\t  % Comment 1\r\n   % Comment 2\n   \x0C  \r\n   /MyName";
+        let mut lexer = Lexer::new(input);
+        lexer.skip_whitespace_and_comments();
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::Name("MyName")));
+        assert_eq!(lexer.next_token().unwrap(), None);
+
+        // Long whitespace (> 32 bytes and > 64 bytes)
+        let long_ws = b"                                                                      /Target";
+        let mut lexer2 = Lexer::new(long_ws);
+        lexer2.skip_whitespace();
+        assert_eq!(lexer2.next_token().unwrap(), Some(Token::Name("Target")));
+    }
+
+    /// Test read_name with short and long names across 16/32 byte boundaries.
+    #[test]
+    fn test_read_name_chunked() {
+        let input = b"/A /Short /AVeryLongIdentifierNameExceedingThirtyTwoBytesInLengthDelimitedByWhitespace [1 2 3]";
+        let mut lexer = Lexer::new(input);
+
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::Name("A")));
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::Name("Short")));
+        assert_eq!(
+            lexer.next_token().unwrap(),
+            Some(Token::Name(
+                "AVeryLongIdentifierNameExceedingThirtyTwoBytesInLengthDelimitedByWhitespace"
+            ))
+        );
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::ArrayOpen));
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::Integer(1)));
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::Integer(2)));
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::Integer(3)));
+        assert_eq!(lexer.next_token().unwrap(), Some(Token::ArrayClose));
+        assert_eq!(lexer.next_token().unwrap(), None);
     }
 }

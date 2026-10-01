@@ -1,0 +1,10 @@
+% PDF Lexer Seed
+123 -456 3.14159
+true false null
+/Name /Type /Page /Catalog
+(A simple string with \(escaped\) parentheses)
+<48656C6C6F20576F726C64>
+<< /Key /Value /Array [ 1 2 3 (nested) ] >>
+stream
+raw payload data here
+endstream

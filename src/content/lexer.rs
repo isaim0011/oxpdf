@@ -43,14 +43,8 @@ impl<'a> ContentLexer<'a> {
     /// Fast-skips whitespace characters according to PDF specification ISO 32000-1 §7.2.2.
     #[inline]
     pub fn skip_whitespace(&mut self) {
-        while self.pos < self.data.len() {
-            let b = self.data[self.pos];
-            if matches!(b, 0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20) {
-                self.pos += 1;
-            } else {
-                break;
-            }
-        }
+        let advanced = crate::simd::find_non_whitespace(&self.data[self.pos..]);
+        self.pos += advanced;
     }
 
     /// Fetches next token while skipping comments and whitespaces.
@@ -167,13 +161,8 @@ impl<'a> ContentLexer<'a> {
     fn read_name(&mut self) -> Result<Token<'a>> {
         self.pos += 1; // skip '/'
         let start = self.pos;
-        while self.pos < self.data.len() {
-            let b = self.data[self.pos];
-            if Self::is_delimiter_or_ws(b) {
-                break;
-            }
-            self.pos += 1;
-        }
+        let advanced = crate::simd::find_delimiter_or_whitespace(&self.data[self.pos..]);
+        self.pos += advanced;
         let raw = &self.data[start..self.pos];
         let name_str = std::str::from_utf8(raw).map_err(|_| Error::SyntaxError {
             offset: start,
@@ -353,13 +342,8 @@ impl<'a> ContentLexer<'a> {
 
     fn read_operator_or_keyword(&mut self) -> Result<Token<'a>> {
         let start = self.pos;
-        while self.pos < self.data.len() {
-            let b = self.data[self.pos];
-            if Self::is_delimiter_or_ws(b) {
-                break;
-            }
-            self.pos += 1;
-        }
+        let advanced = crate::simd::find_delimiter_or_whitespace(&self.data[self.pos..]);
+        self.pos += advanced;
 
         if self.pos == start {
             self.pos += 1;
@@ -432,22 +416,19 @@ impl<'a> ContentLexer<'a> {
         Ok(&self.data[start..])
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_delimiter(b: u8) -> bool {
-        matches!(
-            b,
-            b'(' | b')' | b'<' | b'>' | b'[' | b']' | b'{' | b'}' | b'/' | b'%'
-        )
+        crate::simd::is_delimiter(b)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_whitespace(b: u8) -> bool {
-        matches!(b, 0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20)
+        crate::simd::is_whitespace(b)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_delimiter_or_ws(b: u8) -> bool {
-        Self::is_whitespace(b) || Self::is_delimiter(b)
+        crate::simd::is_delimiter_or_ws(b)
     }
 }
 

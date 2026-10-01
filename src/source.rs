@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+#[cfg(not(target_arch = "wasm32"))]
 use std::fs::File;
 
 /// Abstract source trait for reading PDF byte content.

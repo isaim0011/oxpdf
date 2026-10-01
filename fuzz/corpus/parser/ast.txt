@@ -1,0 +1,8 @@
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 2 0 R
+  /Metadata [ /Title (Test Document) /Keywords [ (pdf) (fuzz) ] ]
+  /Settings << /FastLoad true /MaxZoom 2.5 >>
+>>
+endobj

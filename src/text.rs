@@ -1,3 +1,4 @@
+use crate::cmap::CMap;
 use crate::content::{ContentParser, Operation, Operator};
 use crate::document::Document;
 use crate::error::{Error, Result};
@@ -384,6 +385,8 @@ pub fn decode_literal_escapes(raw: &[u8]) -> Vec<u8> {
 pub struct TextExtractor {
     pub current_encoding: FontEncoding,
     pub font_encodings: HashMap<String, FontEncoding>,
+    pub font_cmaps: HashMap<String, CMap>,
+    pub current_cmap: Option<CMap>,
     pub kerning_threshold: f64,
 }
 
@@ -392,6 +395,8 @@ impl Default for TextExtractor {
         Self {
             current_encoding: FontEncoding::WinAnsiEncoding,
             font_encodings: HashMap::new(),
+            font_cmaps: HashMap::new(),
+            current_cmap: None,
             kerning_threshold: -100.0,
         }
     }
@@ -407,9 +412,23 @@ impl TextExtractor {
         self
     }
 
+    pub fn with_font_cmaps(mut self, cmaps: HashMap<String, CMap>) -> Self {
+        self.font_cmaps = cmaps;
+        self
+    }
+
     pub fn with_kerning_threshold(mut self, threshold: f64) -> Self {
         self.kerning_threshold = threshold;
         self
+    }
+
+    #[inline]
+    fn decode_text_bytes(&self, bytes: &[u8]) -> String {
+        if let Some(ref cmap) = self.current_cmap {
+            cmap.decode_string_with_fallback(bytes, self.current_encoding)
+        } else {
+            decode_text(bytes, self.current_encoding)
+        }
     }
 
     fn append_text(&self, output: &mut String, text: &str) {
@@ -456,12 +475,17 @@ impl TextExtractor {
                         {
                             self.current_encoding = *enc;
                         }
+                        self.current_cmap = self
+                            .font_cmaps
+                            .get(clean)
+                            .or_else(|| self.font_cmaps.get(name.as_ref()))
+                            .cloned();
                     }
                 }
                 Operator::Tj => {
                     if let Some(Object::String(bytes)) = op.operands().first() {
                         self.handle_text_boundary(&mut output, &mut ended_block);
-                        let s = decode_text(bytes, self.current_encoding);
+                        let s = self.decode_text_bytes(bytes);
                         self.append_text(&mut output, &s);
                     }
                 }
@@ -472,7 +496,7 @@ impl TextExtractor {
                     }
                     ended_block = false;
                     if let Some(Object::String(bytes)) = op.operands().first() {
-                        let s = decode_text(bytes, self.current_encoding);
+                        let s = self.decode_text_bytes(bytes);
                         self.append_text(&mut output, &s);
                     }
                 }
@@ -483,7 +507,7 @@ impl TextExtractor {
                     }
                     ended_block = false;
                     if let Some(Object::String(bytes)) = op.operands().get(2) {
-                        let s = decode_text(bytes, self.current_encoding);
+                        let s = self.decode_text_bytes(bytes);
                         self.append_text(&mut output, &s);
                     }
                 }
@@ -493,7 +517,7 @@ impl TextExtractor {
                         for item in items {
                             match item {
                                 Object::String(bytes) => {
-                                    let s = decode_text(bytes, self.current_encoding);
+                                    let s = self.decode_text_bytes(bytes);
                                     self.append_text(&mut output, &s);
                                 }
                                 Object::Integer(k)
@@ -696,12 +720,42 @@ fn resolve_stream_bytes_inner(
     }
 }
 
-/// Gathers font encodings defined in the page dictionary or its inherited resources.
-fn collect_font_encodings(
+fn resolve_to_unicode_cmap(
+    doc: &Document<'_>,
+    font_dict: &BTreeMap<Cow<'_, str>, Object<'_>>,
+) -> Option<CMap> {
+    let to_unicode_obj: Object<'_> = if let Some(obj) = font_dict.get("ToUnicode") {
+        obj.clone()
+    } else if let Some(Object::Array(descendants)) = font_dict.get("DescendantFonts") {
+        match descendants.first() {
+            Some(Object::Dictionary(d)) => d.get("ToUnicode").cloned()?,
+            Some(Object::Reference { id, .. }) => {
+                if let Ok(Some(Object::Dictionary(d))) = doc.get_object(*id) {
+                    d.get("ToUnicode").cloned()?
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        }
+    } else {
+        return None;
+    };
+
+    let stream_bytes = resolve_stream_bytes(doc, &to_unicode_obj).ok()?;
+    if stream_bytes.is_empty() {
+        return None;
+    }
+    CMap::parse(&stream_bytes).ok()
+}
+
+/// Gathers font encodings and ToUnicode CMaps defined in the page dictionary or its inherited resources.
+fn collect_font_resources(
     doc: &Document<'_>,
     page_dict: &BTreeMap<Cow<'_, str>, Object<'_>>,
-) -> HashMap<String, FontEncoding> {
+) -> (HashMap<String, FontEncoding>, HashMap<String, CMap>) {
     let mut encodings = HashMap::new();
+    let mut cmaps = HashMap::new();
 
     // Check direct /Resources or inherit from /Parent
     let mut resources_obj = page_dict.get("Resources");
@@ -731,12 +785,12 @@ fn collect_font_encodings(
 
     let res_dict = match res_dict {
         Some(d) => d,
-        None => return encodings,
+        None => return (encodings, cmaps),
     };
 
     let font_obj = match res_dict.get("Font") {
         Some(f) => f,
-        None => return encodings,
+        None => return (encodings, cmaps),
     };
 
     let font_dict = match font_obj {
@@ -750,7 +804,7 @@ fn collect_font_encodings(
 
     let font_dict = match font_dict {
         Some(d) => d,
-        None => return encodings,
+        None => return (encodings, cmaps),
     };
 
     for (font_name, font_val) in font_dict.iter() {
@@ -776,13 +830,28 @@ fn collect_font_encodings(
                 _ => FontEncoding::WinAnsiEncoding,
             };
 
+            let maybe_cmap = resolve_to_unicode_cmap(doc, &f_dict);
+
             let clean = font_name.trim_start_matches('/').to_string();
             encodings.insert(font_name.to_string(), encoding);
-            encodings.insert(clean, encoding);
+            encodings.insert(clean.clone(), encoding);
+
+            if let Some(cmap) = maybe_cmap {
+                cmaps.insert(font_name.to_string(), cmap.clone());
+                cmaps.insert(clean, cmap);
+            }
         }
     }
 
-    encodings
+    (encodings, cmaps)
+}
+
+#[allow(dead_code)]
+fn collect_font_encodings(
+    doc: &Document<'_>,
+    page_dict: &BTreeMap<Cow<'_, str>, Object<'_>>,
+) -> HashMap<String, FontEncoding> {
+    collect_font_resources(doc, page_dict).0
 }
 
 /// Reads the page dictionary, finds `/Contents`, decompresses them,
@@ -818,12 +887,14 @@ pub fn extract_page_text(doc: &Document<'_>, page_id: u32) -> Result<String> {
         return Ok(String::new());
     }
 
-    let font_encodings = collect_font_encodings(doc, page_dict);
+    let (font_encodings, font_cmaps) = collect_font_resources(doc, page_dict);
 
     let mut parser = ContentParser::new(&decompressed_content);
     let operations = parser.parse()?;
 
-    let mut extractor = TextExtractor::new().with_font_encodings(font_encodings);
+    let mut extractor = TextExtractor::new()
+        .with_font_encodings(font_encodings)
+        .with_font_cmaps(font_cmaps);
     let text = extractor.extract(&operations);
 
     Ok(text)
@@ -1013,4 +1084,131 @@ mod tests {
         let text = doc.extract_text(3).expect("Extract flate page failed");
         assert_eq!(text, "Compressed Flate Text!");
     }
+
+    #[test]
+    fn test_synthetic_pdf_to_unicode_cmap_cjk_and_remapped() {
+        let cmap_stream = br#"
+            /CIDInit /ProcSet findresource begin
+            12 dict begin
+            begincmap
+            /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+            /CMapName /Custom-ToUnicode def
+            /CMapType 2 def
+            1 begincodespacerange
+            <0000> <FFFF>
+            endcodespacerange
+            2 beginbfchar
+            <0001> <4E2D>
+            <0002> <6587>
+            endbfchar
+            1 beginbfrange
+            <0003> <0005> <0041>
+            endbfrange
+            endcmap
+            CMapName currentdict /CMap defineresource pop
+            end
+            end
+        "#;
+
+        let content_stream = b"BT /F1 12 Tf 100 700 Td <00010002000300040005> Tj ET";
+
+        let mut pdf = Vec::new();
+        pdf.extend_from_slice(b"%PDF-1.4\n");
+        // 1: Catalog
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        // 2: Pages root
+        pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        // 3: Page with font resource referencing font 4
+        pdf.extend_from_slice(
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+        );
+        // 4: Font dictionary referencing ToUnicode stream 6
+        pdf.extend_from_slice(
+            b"4 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /CustomCJK /Encoding /Identity-H /ToUnicode 6 0 R >>\nendobj\n",
+        );
+        // 5: Contents stream
+        pdf.extend_from_slice(
+            format!(
+                "5 0 obj\n<< /Length {} >>\nstream\n",
+                content_stream.len()
+            )
+            .as_bytes(),
+        );
+        pdf.extend_from_slice(content_stream);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        // 6: ToUnicode CMap stream
+        pdf.extend_from_slice(
+            format!(
+                "6 0 obj\n<< /Length {} >>\nstream\n",
+                cmap_stream.len()
+            )
+            .as_bytes(),
+        );
+        pdf.extend_from_slice(cmap_stream);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+
+        pdf.extend_from_slice(b"trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n0\n%%EOF");
+
+        let doc = Document::load(&pdf).expect("Document load failed");
+        let text = doc.extract_text(3).expect("Extract page text failed");
+        // <0001> -> U+4E2D ('中')
+        // <0002> -> U+6587 ('文')
+        // <0003> -> U+0041 ('A')
+        // <0004> -> U+0042 ('B')
+        // <0005> -> U+0043 ('C')
+        assert_eq!(text, "中文ABC");
+    }
+
+    #[test]
+    fn test_synthetic_pdf_to_unicode_cmap_ligatures_and_tj() {
+        let cmap_stream = br#"
+            1 begincodespacerange
+            <0000> <FFFF>
+            endcodespacerange
+            2 beginbfchar
+            <0001> <00660069>
+            <0002> <0066006C>
+            endbfchar
+            1 beginbfrange
+            <0010> <0012> [ <0048> <0049> <0021> ]
+            endbfrange
+        "#;
+
+        let content_stream = b"BT /F1 12 Tf [<0001> -250 <0002> -250 <001000110012>] TJ ET";
+
+        let mut pdf = Vec::new();
+        pdf.extend_from_slice(b"%PDF-1.4\n");
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        pdf.extend_from_slice(
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+        );
+        pdf.extend_from_slice(
+            b"4 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /CustomLigatures /Encoding /Identity-H /ToUnicode 6 0 R >>\nendobj\n",
+        );
+        pdf.extend_from_slice(
+            format!(
+                "5 0 obj\n<< /Length {} >>\nstream\n",
+                content_stream.len()
+            )
+            .as_bytes(),
+        );
+        pdf.extend_from_slice(content_stream);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        pdf.extend_from_slice(
+            format!(
+                "6 0 obj\n<< /Length {} >>\nstream\n",
+                cmap_stream.len()
+            )
+            .as_bytes(),
+        );
+        pdf.extend_from_slice(cmap_stream);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        pdf.extend_from_slice(b"trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n0\n%%EOF");
+
+        let doc = Document::load(&pdf).expect("Document load failed");
+        let text = doc.extract_text(3).expect("Extract page text failed");
+        assert_eq!(text, "fi fl HI!");
+    }
 }
+

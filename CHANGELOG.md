@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-10-01
+
+### Added
+- **/ToUnicode CMap Font Stream Parser** (`src/cmap.rs`):
+  - Full implementation of Adobe PostScript & PDF CMap syntax per ISO 32000-1 §9.10.
+  - Supports `begincodespacerange` (1–4 byte codespaces), `beginbfchar` (scalar and multi-codepoint ligatures e.g. `fi`, `fl`, emoji surrogate pairs), and `beginbfrange` (both contiguous code mapping and destination array bracket syntax).
+  - Deeply integrated into `TextExtractor` and `extract_page_text()` via automatic `/Resources -> /Font -> /ToUnicode` stream resolution.
+- **Stage B Portable SIMD Structural Scanning** (`src/simd.rs`):
+  - 16-byte and 32-byte chunked structural classification using fast SWAR bitmask vectorization on stable Rust across all architectures (`x86_64`, `aarch64`, `wasm32`).
+  - Accelerates `skip_whitespace`, `skip_whitespace_and_comments`, `read_name`, and delimiter demarcation in both `Lexer` and `ContentLexer`.
+- **`oxpdf-cli` Command-Line Tool** (`oxpdf-cli/`):
+  - Standalone high-performance CLI utility providing `inspect`, `extract-text`, `pack` (QPDF-style stream compaction), and `bench` subcommands.
+- **`oxpdf-wasm` WebAssembly Bindings** (`oxpdf-wasm/`):
+  - Zero-copy browser and edge WebAssembly bindings exposing `WasmDocument` with text extraction, page counting, and object stream compaction for `wasm32-unknown-unknown`.
+- **Continuous Fuzzing Infrastructure** (`fuzz/`):
+  - `cargo-fuzz` integration with 4 dedicated `libfuzzer-sys` fuzz targets (`lexer`, `parser`, `xref`, `filter`) and seeded adversarial corpora.
+- **Typst Ecosystem Positioning & Comparison**:
+  - Comprehensive architectural analysis in `BENCHMARKS.md` and `DESIGN.md` establishing the complementary roles of Typst (typesetting compiler: markup -> PDF) and oxpdf (streaming parser and reconstructor: PDF -> AST/text/packed PDF).
+
+### Fixed
+- **Fault-Tolerant Recovery Slice Boundary** (`src/recover.rs`):
+  - Fixed an issue where arbitrary 64-byte lookback slices starting on lone delimiters aborted the tokenization loop, ensuring all indirect objects are discovered and indexed during linear recovery passes.
+- **WASM Clean Compilation** (`src/source.rs`):
+  - Gated host filesystem imports behind `#[cfg(not(target_arch = "wasm32"))]`, eliminating all warnings on wasm32 compilation targets.
+
 ## [1.0.0] - 2026-10-01
 
 ### Added
