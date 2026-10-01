@@ -5,6 +5,12 @@ edition = "2021"
 authors = ["isaim0011 <https://github.com/isaim0011>"]
 description = "High-performance command-line interface for the oxpdf PDF engine"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/isaim0011/oxpdf"
+homepage = "https://github.com/isaim0011/oxpdf"
+documentation = "https://docs.rs/oxpdf-cli"
+readme = "README.md"
+keywords = ["pdf", "cli", "streaming", "parser", "inspector"]
+categories = ["command-line-utilities", "parser-implementations"]
 
 [[bin]]
 name = "oxpdf"
