@@ -416,7 +416,7 @@ mod tests {
             assert!(!is_delimiter(b), "Byte 0x{:02X} should not be delimiter", b);
         }
 
-        let delim_chars = [b'(', b')', b'<', b'>', b'[', b']', b'{', b'}', b'/', b'%'];
+        let delim_chars = b"()<>[{}/%]";
         for &b in &delim_chars {
             assert!(
                 !is_whitespace(b),
