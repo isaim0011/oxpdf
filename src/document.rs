@@ -237,6 +237,14 @@ impl<'a> Document<'a> {
             })
     }
 
+    /// Resolves and returns the Root Catalog dictionary object, if present.
+    pub fn catalog(&self) -> Result<Option<Object<'static>>> {
+        match self.catalog_id() {
+            Some(id) => self.get_object(id),
+            None => Ok(None),
+        }
+    }
+
     /// Recursively flattens the page tree (/Pages -> /Kids) using a loop-guarded worklist.
     pub fn get_page_ids(&self) -> Result<Vec<u32>> {
         let catalog_id = match self.catalog_id() {
@@ -300,6 +308,15 @@ impl<'a> Document<'a> {
     /// Returns the resolved page count of the document.
     pub fn page_count(&self) -> Result<usize> {
         self.get_page_ids().map(|p| p.len())
+    }
+
+    /// Resolves and returns a specific page dictionary object by 0-based page index.
+    pub fn get_page(&self, index: usize) -> Result<Option<Object<'static>>> {
+        let page_ids = self.get_page_ids()?;
+        match page_ids.get(index) {
+            Some(&id) => self.get_object(id),
+            None => Ok(None),
+        }
     }
 
     /// Extracts Unicode plaintext from a specific page by ID (§1, §7, Tier 5).
@@ -623,6 +640,9 @@ startxref\n\
         let doc = Document::load(sample).unwrap();
         assert_eq!(doc.page_count().unwrap(), 1);
         assert_eq!(doc.get_page_ids().unwrap(), vec![3]);
+        assert!(doc.catalog().unwrap().is_some());
+        assert!(doc.get_page(0).unwrap().is_some());
+        assert!(doc.get_page(1).unwrap().is_none());
     }
 
     #[test]
