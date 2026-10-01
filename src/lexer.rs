@@ -438,7 +438,8 @@ mod tests {
         assert_eq!(lexer.next_token().unwrap(), None);
 
         // Long whitespace (> 32 bytes and > 64 bytes)
-        let long_ws = b"                                                                      /Target";
+        let long_ws =
+            b"                                                                      /Target";
         let mut lexer2 = Lexer::new(long_ws);
         lexer2.skip_whitespace();
         assert_eq!(lexer2.next_token().unwrap(), Some(Token::Name("Target")));

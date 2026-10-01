@@ -1128,21 +1128,13 @@ mod tests {
         );
         // 5: Contents stream
         pdf.extend_from_slice(
-            format!(
-                "5 0 obj\n<< /Length {} >>\nstream\n",
-                content_stream.len()
-            )
-            .as_bytes(),
+            format!("5 0 obj\n<< /Length {} >>\nstream\n", content_stream.len()).as_bytes(),
         );
         pdf.extend_from_slice(content_stream);
         pdf.extend_from_slice(b"\nendstream\nendobj\n");
         // 6: ToUnicode CMap stream
         pdf.extend_from_slice(
-            format!(
-                "6 0 obj\n<< /Length {} >>\nstream\n",
-                cmap_stream.len()
-            )
-            .as_bytes(),
+            format!("6 0 obj\n<< /Length {} >>\nstream\n", cmap_stream.len()).as_bytes(),
         );
         pdf.extend_from_slice(cmap_stream);
         pdf.extend_from_slice(b"\nendstream\nendobj\n");
@@ -1187,20 +1179,12 @@ mod tests {
             b"4 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /CustomLigatures /Encoding /Identity-H /ToUnicode 6 0 R >>\nendobj\n",
         );
         pdf.extend_from_slice(
-            format!(
-                "5 0 obj\n<< /Length {} >>\nstream\n",
-                content_stream.len()
-            )
-            .as_bytes(),
+            format!("5 0 obj\n<< /Length {} >>\nstream\n", content_stream.len()).as_bytes(),
         );
         pdf.extend_from_slice(content_stream);
         pdf.extend_from_slice(b"\nendstream\nendobj\n");
         pdf.extend_from_slice(
-            format!(
-                "6 0 obj\n<< /Length {} >>\nstream\n",
-                cmap_stream.len()
-            )
-            .as_bytes(),
+            format!("6 0 obj\n<< /Length {} >>\nstream\n", cmap_stream.len()).as_bytes(),
         );
         pdf.extend_from_slice(cmap_stream);
         pdf.extend_from_slice(b"\nendstream\nendobj\n");
@@ -1211,4 +1195,3 @@ mod tests {
         assert_eq!(text, "fi fl HI!");
     }
 }
-

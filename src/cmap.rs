@@ -220,7 +220,8 @@ impl CMap {
                             Some(c) => c,
                             None => continue,
                         };
-                        if byte_len1 >= 2 || byte_len2 >= 2 || start_code > 0xFF || end_code > 0xFF {
+                        if byte_len1 >= 2 || byte_len2 >= 2 || start_code > 0xFF || end_code > 0xFF
+                        {
                             cmap.has_2byte_codes = true;
                         }
                         if end_code < start_code {
@@ -248,30 +249,29 @@ impl CMap {
                                     }
                                 }
                             }
-                            _ => {
-                                match &dst_tok {
-                                    CMapToken::HexString(dst_bytes, _) | CMapToken::String(dst_bytes) => {
-                                        for k in 0..=range_len {
-                                            let code = start_code + k;
-                                            let inc = increment_dst_bytes(dst_bytes, k);
-                                            let dst_str = decode_unicode_dest(&inc);
-                                            cmap.mappings.insert(code, dst_str);
-                                        }
+                            _ => match &dst_tok {
+                                CMapToken::HexString(dst_bytes, _)
+                                | CMapToken::String(dst_bytes) => {
+                                    for k in 0..=range_len {
+                                        let code = start_code + k;
+                                        let inc = increment_dst_bytes(dst_bytes, k);
+                                        let dst_str = decode_unicode_dest(&inc);
+                                        cmap.mappings.insert(code, dst_str);
                                     }
-                                    CMapToken::Integer(dst_val) if *dst_val >= 0 => {
-                                        let base = *dst_val as u32;
-                                        for k in 0..=range_len {
-                                            let code = start_code + k;
-                                            let cur = base.wrapping_add(k);
-                                            let dst_str = char::from_u32(cur)
-                                                .map(|c| c.to_string())
-                                                .unwrap_or_else(|| "\u{FFFD}".to_string());
-                                            cmap.mappings.insert(code, dst_str);
-                                        }
-                                    }
-                                    _ => {}
                                 }
-                            }
+                                CMapToken::Integer(dst_val) if *dst_val >= 0 => {
+                                    let base = *dst_val as u32;
+                                    for k in 0..=range_len {
+                                        let code = start_code + k;
+                                        let cur = base.wrapping_add(k);
+                                        let dst_str = char::from_u32(cur)
+                                            .map(|c| c.to_string())
+                                            .unwrap_or_else(|| "\u{FFFD}".to_string());
+                                        cmap.mappings.insert(code, dst_str);
+                                    }
+                                }
+                                _ => {}
+                            },
                         }
                     }
                 }

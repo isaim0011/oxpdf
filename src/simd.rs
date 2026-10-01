@@ -418,7 +418,11 @@ mod tests {
 
         let delim_chars = [b'(', b')', b'<', b'>', b'[', b']', b'{', b'}', b'/', b'%'];
         for &b in &delim_chars {
-            assert!(!is_whitespace(b), "Byte {:?} should not be whitespace", b as char);
+            assert!(
+                !is_whitespace(b),
+                "Byte {:?} should not be whitespace",
+                b as char
+            );
             assert!(is_delimiter(b), "Byte {:?} should be delimiter", b as char);
             assert!(
                 is_delimiter_or_ws(b),
@@ -431,7 +435,11 @@ mod tests {
         for &b in regular_chars {
             assert!(!is_whitespace(b), "Byte {:?} should not be ws", b as char);
             assert!(!is_delimiter(b), "Byte {:?} should not be delim", b as char);
-            assert!(!is_delimiter_or_ws(b), "Byte {:?} should not be delim_or_ws", b as char);
+            assert!(
+                !is_delimiter_or_ws(b),
+                "Byte {:?} should not be delim_or_ws",
+                b as char
+            );
         }
     }
 
@@ -477,7 +485,9 @@ mod tests {
         assert_eq!(find_delimiter_or_whitespace(b"Catalog/Page"), 7);
         assert_eq!(find_delimiter_or_whitespace(b"MediaBox [0 0 612 792]"), 8);
         assert_eq!(
-            find_delimiter_or_whitespace(b"ThisIsAVeryLongNameWithoutAnyDelimitersUntilTheEndNow/Stop"),
+            find_delimiter_or_whitespace(
+                b"ThisIsAVeryLongNameWithoutAnyDelimitersUntilTheEndNow/Stop"
+            ),
             53
         );
     }
