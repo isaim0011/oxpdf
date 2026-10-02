@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-10-02
+
+### Added
+- **Standard Security Handler** (`src/crypto/`):
+  - Complete implementation of ISO 32000-1 & ISO 32000-2 encryption handler supporting V1–V6.
+  - Pure-Rust RC4 stream cipher (40-bit and 128-bit key scheduling and stream PRGA).
+  - AES-128-CBC and AES-256-CBC cipher support with 16-byte random IV extraction and PKCS#7 unpadding.
+  - Password authentication supporting default empty string (`""`) and custom passwords via `Document::load_with_password()`.
+  - ISO 32000-2 (R6) key derivation with 100,000 SHA-2 iterations and validation hashes.
+- **Embedded Font Introspection** (`src/font/`):
+  - Mojibake elimination fallback when `/ToUnicode` CMaps are absent.
+  - Zero-copy TrueType (`/FontFile2`) binary table parsing: sfnt headers, `cmap` (Format 4 BMP, Format 12 UCS-4), and `post` (Format 1.0/2.0 standard Mac and Pascal glyph names).
+  - Compact Font Format (`/FontFile3` CFF) binary parser: Header, Name INDEX, Top DICT, String INDEX, and Charsets 0–2.
+  - Full Adobe Glyph List (`AGL`) normalization resolving PostScript glyph names to Unicode code points.
+- **Bi-Level Compression Filters** (`src/filter/`):
+  - Pure-Rust ITU-T T.4/T.6 CCITTFaxDecode run-length decoder (`src/filter/ccitt.rs`) supporting Group 3 1D/2D and Group 4 2D modes.
+  - JBIG2 bi-level stream decoder with `/JBIG2Globals` stream dictionary resolution (`src/filter/jbig2.rs`).
+  - Strict bounded decompression ceilings enforced across all codecs.
+- **Spatial Geometry & Matrix Transformation Engine** (`src/geom/`):
+  - Affine 3x3 transformation matrix math (`Matrix`, `Point`, `Rect`) supporting identity, multiply, point/rect transforms, and matrix inversion.
+  - Graphics state stack tracker (`GraphicsStateTracker`) handling `q`, `Q`, and `cm` concatenation.
+  - Text state tracker maintaining Text Matrix ($T_m$), Text Line Matrix ($T_{lm}$), leading, scaling, and device coordinates ($T_{\text{device}} = T_m \times CTM$).
+  - `TextSpan<'static>` emission with spatial bounding box coordinates, font sizes, font names, and style flags.
+  - Public `Document::extract_spans(page_id)` and `Document::extract_spans_all()` methods.
+- **Expanded Adversarial & Fuzzing Hardening**:
+  - 4 new continuous fuzz targets in `fuzz/fuzz_targets/`: `crypto`, `font`, `ccitt`, and `matrix`.
+  - Integration adversarial suite in `tests/adversarial_suite.rs` validating memory boundaries, float safety, and recursion limits.
+- **Global Cross-Stack Benchmark Suite**:
+  - Comprehensive empirical comparison in `BENCHMARKS.md` evaluating `oxpdf` against Rust (`lopdf`, `pdf`), C/C++ (`MuPDF`, `Poppler`, `PDFium`, `QPDF`), Java (`PDFBox`, `Tika`), Python (`pypdf`, `pdfplumber`), Node (`pdfjs-dist`), and Go (`pdfcpu`).
+  - 1.024 GB multi-gigabyte streaming document stress test demonstrating sub-millisecond load time (201 µs) and strictly bounded physical RAM (<3.1 MB RSS).
+
+### Changed
+- Removed decryption from Scope Exclusions in `README.md` and promoted encrypted file handling to fully supported.
+- Updated crate versions and satellite crates to `1.0.2`.
+
 ## [1.0.1] - 2026-10-01
 
 ### Added
