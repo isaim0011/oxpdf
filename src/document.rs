@@ -10,87 +10,149 @@ use std::io::Write;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use crate::crypto::StandardSecurityHandler;
+use std::borrow::Cow;
+
 /// High-level, memory-bounded PDF Document structure.
 /// Allows lazy object loading, page extraction, and merging without loading multi-gigabyte files into RAM.
 pub struct Document<'a> {
     data: &'a [u8],
     pub xref: XRefTable,
     obj_stm_cache: RefCell<HashMap<u32, (usize, Vec<u8>)>>,
+    pub security_handler: Option<StandardSecurityHandler>,
+    encrypt_obj_id: Option<u32>,
 }
 
 impl<'a> Document<'a> {
     /// Loads a document by inspecting its cross-reference structure or reconstructing it.
     ///
-    /// Returns `Err(Error::Unsupported("encrypted"))` immediately for password-protected PDFs
-    /// rather than producing garbled output or hanging.
+    /// Automatically attempts default authentication with empty password `""`.
+    /// For documents requiring non-empty user or owner credentials, use [`Document::load_with_password`].
     pub fn load(data: &'a [u8]) -> Result<Self> {
-        // Fast pre-check: scan last 4 KB for /Encrypt in the trailer region.
-        // Full encryption detection happens after xref parse via the trailer dict.
-        let trailer_scan_start = data.len().saturating_sub(4096);
-        let trailer_tail = &data[trailer_scan_start..];
-        if memchr::memmem::find(trailer_tail, b"/Encrypt").is_some()
-            && (memchr::memmem::find(trailer_tail, b"trailer").is_some()
-                || memchr::memmem::find(trailer_tail, b"/Type /XRef").is_some())
-        {
-            return Err(Error::Unsupported("encrypted: /Encrypt key in trailer"));
-        }
+        Self::load_with_password(data, b"")
+    }
 
+    /// Loads a document with the specified user or owner password.
+    pub fn load_with_password<P: AsRef<[u8]>>(data: &'a [u8], password: P) -> Result<Self> {
         let xref = XRefTable::parse_or_reconstruct(data)?;
-
-        // Second check: /Encrypt in the parsed trailer dict
-        if xref
-            .trailer_dict
-            .as_ref()
-            .is_some_and(|t| t.contains_key("Encrypt"))
-        {
-            return Err(Error::Unsupported(
-                "encrypted: /Encrypt in trailer dictionary",
-            ));
-        }
-
-        Ok(Self {
-            data,
-            xref,
-            obj_stm_cache: RefCell::new(HashMap::new()),
-        })
+        Self::init_with_xref(data, xref, password.as_ref())
     }
 
     /// Loads a document strictly per §3.1: fails immediately on any structural corruption
     /// without attempting recovery.
     pub fn load_strict(data: &'a [u8]) -> Result<Self> {
-        let trailer_scan_start = data.len().saturating_sub(4096);
-        let trailer_tail = &data[trailer_scan_start..];
-        if memchr::memmem::find(trailer_tail, b"/Encrypt").is_some()
-            && (memchr::memmem::find(trailer_tail, b"trailer").is_some()
-                || memchr::memmem::find(trailer_tail, b"/Type /XRef").is_some())
-        {
-            return Err(Error::Unsupported("encrypted: /Encrypt key in trailer"));
-        }
+        Self::load_strict_with_password(data, b"")
+    }
 
+    /// Loads a document strictly with the specified user or owner password.
+    pub fn load_strict_with_password<P: AsRef<[u8]>>(data: &'a [u8], password: P) -> Result<Self> {
         let xref = XRefTable::parse_standard(data)?;
+        Self::init_with_xref(data, xref, password.as_ref())
+    }
 
-        if xref
-            .trailer_dict
-            .as_ref()
-            .is_some_and(|t| t.contains_key("Encrypt"))
-        {
-            return Err(Error::Unsupported(
-                "encrypted: /Encrypt in trailer dictionary",
-            ));
+    fn init_with_xref(data: &'a [u8], xref: XRefTable, password: &[u8]) -> Result<Self> {
+        let mut security_handler = None;
+        let mut encrypt_obj_id = None;
+
+        if let Some(ref trailer) = xref.trailer {
+            if let Some(encrypt_val) = trailer.get("Encrypt") {
+                let (encrypt_dict, enc_id) = match encrypt_val {
+                    Object::Reference { id, .. } => {
+                        let obj = Self::parse_raw_indirect_object(data, &xref, *id)?;
+                        match obj {
+                            Some(Object::Dictionary(d)) => (d, Some(*id)),
+                            _ => {
+                                return Err(Error::SyntaxError {
+                                    offset: 0,
+                                    message: "Invalid /Encrypt indirect object dictionary",
+                                })
+                            }
+                        }
+                    }
+                    Object::Dictionary(d) => (d.clone(), None),
+                    _ => {
+                        return Err(Error::SyntaxError {
+                            offset: 0,
+                            message: "Invalid /Encrypt entry in trailer",
+                        })
+                    }
+                };
+
+                encrypt_obj_id = enc_id;
+
+                let trailer_id_0 = trailer.get("ID").and_then(|id_obj| match id_obj {
+                    Object::Array(arr) => arr.first().and_then(|item| match item {
+                        Object::String(bytes) => Some(bytes.as_slice()),
+                        _ => None,
+                    }),
+                    _ => None,
+                });
+
+                let mut borrowed_dict = BTreeMap::new();
+                for (k, v) in &encrypt_dict {
+                    borrowed_dict.insert(Cow::Borrowed(k.as_ref()), v.clone());
+                }
+
+                let handler = StandardSecurityHandler::from_encrypt_dict(
+                    &borrowed_dict,
+                    trailer_id_0,
+                    password,
+                )?;
+                security_handler = Some(handler);
+            }
         }
 
         Ok(Self {
             data,
             xref,
             obj_stm_cache: RefCell::new(HashMap::new()),
+            security_handler,
+            encrypt_obj_id,
         })
+    }
+
+    fn parse_raw_indirect_object(
+        data: &[u8],
+        xref: &XRefTable,
+        id: u32,
+    ) -> Result<Option<Object<'static>>> {
+        match xref.get(id) {
+            Some(XRefEntry::InUse { offset, .. }) => {
+                let start = match usize::try_from(*offset) {
+                    Ok(s) => s,
+                    Err(_) => return Err(Error::UnexpectedEof(usize::MAX)),
+                };
+                if start >= data.len() {
+                    return Err(Error::UnexpectedEof(start));
+                }
+
+                let mut parser = Parser::new(&data[start..]);
+                let lexer = parser.lexer_mut();
+                let _id_tok = lexer.next_token()?;
+                let _gen_tok = lexer.next_token()?;
+                let obj_tok = lexer.next_token()?;
+                match obj_tok {
+                    Some(Token::Keyword("obj")) => {}
+                    _ => {
+                        return Err(Error::SyntaxError {
+                            offset: start,
+                            message: "Expected 'obj' keyword after object id and generation",
+                        })
+                    }
+                }
+                let obj = parser.parse_object()?;
+                Ok(obj.map(|o| o.into_owned()))
+            }
+            _ => Ok(None),
+        }
     }
 
     /// Fetches an indirect object by id without parsing other objects.
     /// If the object is stored directly in the document, returns a zero-copy borrowed `Object<'static>`.
     pub fn get_object(&self, id: u32) -> Result<Option<Object<'static>>> {
         match self.xref.get(id) {
-            Some(XRefEntry::InUse { offset, .. }) => {
+            Some(XRefEntry::InUse { offset, gen }) => {
+                let gen = *gen;
                 let start = match usize::try_from(*offset) {
                     Ok(s) => s,
                     Err(_) => return Err(Error::UnexpectedEof(usize::MAX)),
@@ -116,7 +178,18 @@ impl<'a> Document<'a> {
                 }
                 // Parse the actual object payload and convert into owned for unified lifetime
                 let obj = parser.parse_object()?;
-                Ok(obj.map(|o| o.into_owned()))
+                let mut owned = match obj {
+                    Some(o) => o.into_owned(),
+                    None => return Ok(None),
+                };
+
+                if let Some(ref handler) = self.security_handler {
+                    if self.encrypt_obj_id != Some(id) {
+                        Self::decrypt_object_recursive(&mut owned, id, gen, handler)?;
+                    }
+                }
+
+                Ok(Some(owned))
             }
             Some(XRefEntry::Compressed {
                 stream_obj_id,
@@ -593,6 +666,68 @@ impl<'a> Document<'a> {
 
         Ok(ser.bytes_written())
     }
+
+    fn decrypt_object_recursive(
+        obj: &mut Object<'static>,
+        id: u32,
+        gen: u16,
+        handler: &StandardSecurityHandler,
+    ) -> Result<()> {
+        match obj {
+            Object::String(bytes) => {
+                let dec = handler.decrypt_string(id, gen, bytes.as_slice())?;
+                *bytes = smallvec::SmallVec::from_vec(dec);
+            }
+            Object::Array(arr) => {
+                for item in arr {
+                    Self::decrypt_object_recursive(item, id, gen, handler)?;
+                }
+            }
+            Object::Dictionary(dict) => {
+                for v in dict.values_mut() {
+                    Self::decrypt_object_recursive(v, id, gen, handler)?;
+                }
+            }
+            Object::Stream { dict, data } => {
+                for v in dict.values_mut() {
+                    Self::decrypt_object_recursive(v, id, gen, handler)?;
+                }
+                let is_metadata = dict.get("Type").and_then(|t| t.as_name()) == Some("Metadata");
+                if !(is_metadata && !handler.encrypt_metadata()) {
+                    let dec = handler.decrypt_stream(id, gen, data.as_ref())?;
+                    *data = Cow::Owned(dec);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Decrypts a stream using the document's security handler (or returns verbatim if unencrypted).
+    pub fn decrypt_stream(&self, obj_id: u32, gen: u16, raw: &[u8]) -> Result<Vec<u8>> {
+        if let Some(ref handler) = self.security_handler {
+            if self.encrypt_obj_id == Some(obj_id) {
+                Ok(raw.to_vec())
+            } else {
+                handler.decrypt_stream(obj_id, gen, raw)
+            }
+        } else {
+            Ok(raw.to_vec())
+        }
+    }
+
+    /// Decrypts a string using the document's security handler (or returns verbatim if unencrypted).
+    pub fn decrypt_string(&self, obj_id: u32, gen: u16, raw: &[u8]) -> Result<Vec<u8>> {
+        if let Some(ref handler) = self.security_handler {
+            if self.encrypt_obj_id == Some(obj_id) {
+                Ok(raw.to_vec())
+            } else {
+                handler.decrypt_string(obj_id, gen, raw)
+            }
+        } else {
+            Ok(raw.to_vec())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -715,5 +850,122 @@ startxref\n\
         assert_eq!(recovered.catalog_id().unwrap(), 1);
         let cat = recovered.get_object(1).unwrap().unwrap();
         assert!(matches!(cat, Object::Dictionary(_)));
+    }
+
+    #[test]
+    fn test_document_load_encrypted_with_password() {
+        use crate::crypto::aes::aes_128_cbc_encrypt;
+        use crate::crypto::handler::PAD_BYTES;
+        use crate::crypto::StandardSecurityHandler;
+        use md5::{Digest as _, Md5};
+
+        let password = b"userpass";
+        let file_id = b"1234567890abcdef";
+        let permissions = -4i32;
+        let dummy_o = [0x99u8; 32];
+
+        // 1. Derive DEK
+        let dek = StandardSecurityHandler::derive_key_r2_r4(
+            password,
+            &dummy_o,
+            permissions,
+            file_id,
+            4,
+            16,
+            true,
+        );
+
+        // 2. Generate U entry per Algorithm 3.5
+        let mut hasher = Md5::new();
+        hasher.update(PAD_BYTES);
+        hasher.update(file_id);
+        let hash = hasher.finalize();
+
+        let mut res = crate::crypto::Rc4::new(&dek).encrypt(&hash);
+        let mut key = vec![0u8; 16];
+        for i in 1..=19 {
+            for (in_b, out_b) in dek.iter().zip(key.iter_mut()) {
+                *out_b = *in_b ^ i;
+            }
+            res = crate::crypto::Rc4::new(&key).encrypt(&res);
+        }
+        let mut u_val = res;
+        u_val.extend_from_slice(&[0u8; 16]); // 32 bytes
+
+        // Encrypt stream 3 0 obj with AES-128
+        let stream_id: u32 = 3;
+        let stream_gen: u16 = 0;
+        let obj_key = {
+            let mut hasher = Md5::new();
+            hasher.update(&dek);
+            hasher.update(&stream_id.to_le_bytes()[..3]);
+            hasher.update(&stream_gen.to_le_bytes()[..2]);
+            hasher.update(b"sAlT");
+            hasher.finalize()
+        };
+
+        let iv = [0x42u8; 16];
+        let plaintext_stream = b"q 1 0 0 1 0 0 cm BT /F1 12 Tf (Encrypted text payload) Tj ET Q";
+        let encrypted_stream = aes_128_cbc_encrypt(&obj_key, &iv, plaintext_stream).unwrap();
+
+        let hex_o: String = dummy_o.iter().map(|b| format!("{:02x}", b)).collect();
+        let hex_u: String = u_val.iter().map(|b| format!("{:02x}", b)).collect();
+        let hex_id: String = file_id.iter().map(|b| format!("{:02x}", b)).collect();
+
+        let mut pdf = Vec::new();
+        pdf.extend_from_slice(b"%PDF-1.6\n");
+        let off1 = pdf.len();
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        let off2 = pdf.len();
+        pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        let off3 = pdf.len();
+        pdf.extend_from_slice(
+            format!(
+                "3 0 obj\n<< /Type /Page /Parent 2 0 R /Length {} >>\nstream\n",
+                encrypted_stream.len()
+            )
+            .as_bytes(),
+        );
+        pdf.extend_from_slice(&encrypted_stream);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        let off4 = pdf.len();
+        pdf.extend_from_slice(
+            format!(
+                "4 0 obj\n<< /Filter /Standard /V 4 /R 4 /Length 128 /P {} /O <{}> /U <{}> /StmF /StdCF /StrF /StdCF >>\nendobj\n",
+                permissions, hex_o, hex_u
+            )
+            .as_bytes(),
+        );
+        let xref_off = pdf.len();
+        pdf.extend_from_slice(
+            format!(
+"xref\n0 5\n0000000000 65535 f \r\n{:010} 00000 n \r\n{:010} 00000 n \r\n{:010} 00000 n \r\n{:010} 00000 n \r\ntrailer\n<< /Size 5 /Root 1 0 R /Encrypt 4 0 R /ID [<{}> <{}>] >>\nstartxref\n{}\n%%EOF",
+                off1, off2, off3, off4, hex_id, hex_id, xref_off
+            )
+            .as_bytes(),
+        );
+
+        // Load without password should fail because password is not empty
+        assert!(Document::load(&pdf).is_err());
+
+        // Load with wrong password should fail
+        assert!(Document::load_with_password(&pdf, "wrongpass").is_err());
+
+        // Load with correct password must succeed!
+        let doc = Document::load_with_password(&pdf, "userpass").expect("load failed");
+        assert!(doc.security_handler.is_some());
+
+        // Retrieve and verify decrypted stream object
+        let stream_obj = doc.get_object(3).unwrap().unwrap();
+        match stream_obj {
+            Object::Stream { data, .. } => {
+                assert_eq!(data.as_ref(), plaintext_stream);
+            }
+            _ => panic!("Expected stream object"),
+        }
+
+        // Test decrypt_stream helper directly
+        let decrypted = doc.decrypt_stream(3, 0, &encrypted_stream).unwrap();
+        assert_eq!(decrypted, plaintext_stream);
     }
 }

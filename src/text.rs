@@ -2,6 +2,8 @@ use crate::cmap::CMap;
 use crate::content::{ContentParser, Operation, Operator};
 use crate::document::Document;
 use crate::error::{Error, Result};
+use crate::font::{CffFont, EmbeddedFont, TrueTypeFont};
+use crate::geom::{FontInfo, GraphicsStateTracker, TextSpan};
 use crate::stream::{FilterKind, StreamView};
 use crate::types::Object;
 use std::borrow::Cow;
@@ -386,7 +388,9 @@ pub struct TextExtractor {
     pub current_encoding: FontEncoding,
     pub font_encodings: HashMap<String, FontEncoding>,
     pub font_cmaps: HashMap<String, CMap>,
+    pub font_embedded: HashMap<String, EmbeddedFont>,
     pub current_cmap: Option<CMap>,
+    pub current_embedded: Option<EmbeddedFont>,
     pub kerning_threshold: f64,
 }
 
@@ -396,7 +400,9 @@ impl Default for TextExtractor {
             current_encoding: FontEncoding::WinAnsiEncoding,
             font_encodings: HashMap::new(),
             font_cmaps: HashMap::new(),
+            font_embedded: HashMap::new(),
             current_cmap: None,
+            current_embedded: None,
             kerning_threshold: -100.0,
         }
     }
@@ -417,6 +423,11 @@ impl TextExtractor {
         self
     }
 
+    pub fn with_font_embedded(mut self, embedded: HashMap<String, EmbeddedFont>) -> Self {
+        self.font_embedded = embedded;
+        self
+    }
+
     pub fn with_kerning_threshold(mut self, threshold: f64) -> Self {
         self.kerning_threshold = threshold;
         self
@@ -426,6 +437,16 @@ impl TextExtractor {
     fn decode_text_bytes(&self, bytes: &[u8]) -> String {
         if let Some(ref cmap) = self.current_cmap {
             cmap.decode_string_with_fallback(bytes, self.current_encoding)
+        } else if let Some(ref embedded) = self.current_embedded {
+            let mut out = String::new();
+            for &b in bytes {
+                if let Some(ch) = embedded.map_glyph_to_unicode(b as u16) {
+                    out.push(ch);
+                } else {
+                    out.push(crate::cmap::decode_fallback_char(b, self.current_encoding));
+                }
+            }
+            out
         } else {
             decode_text(bytes, self.current_encoding)
         }
@@ -479,6 +500,11 @@ impl TextExtractor {
                             .font_cmaps
                             .get(clean)
                             .or_else(|| self.font_cmaps.get(name.as_ref()))
+                            .cloned();
+                        self.current_embedded = self
+                            .font_embedded
+                            .get(clean)
+                            .or_else(|| self.font_embedded.get(name.as_ref()))
                             .cloned();
                     }
                 }
@@ -626,15 +652,25 @@ fn extract_stream_filters(dict: &BTreeMap<Cow<'_, str>, Object<'_>>) -> Result<V
         None => return Ok(Vec::new()),
     };
 
+    let decode_parms_obj = dict.get("DecodeParms");
+
     let mut filters = Vec::new();
     match filter_obj {
         Object::Name(name) => {
-            filters.push(parse_filter_name(name)?);
+            let parms_dict = decode_parms_obj.and_then(|o| o.as_dict());
+            filters.push(parse_filter_with_parms(name, parms_dict)?);
         }
         Object::Array(arr) => {
-            for item in arr {
+            let parms_arr = match decode_parms_obj {
+                Some(Object::Array(pa)) => Some(pa.as_slice()),
+                _ => None,
+            };
+            for (i, item) in arr.iter().enumerate() {
                 if let Object::Name(name) = item {
-                    filters.push(parse_filter_name(name)?);
+                    let parms_dict = parms_arr
+                        .and_then(|pa| pa.get(i))
+                        .and_then(|o| o.as_dict());
+                    filters.push(parse_filter_with_parms(name, parms_dict)?);
                 }
             }
         }
@@ -643,12 +679,55 @@ fn extract_stream_filters(dict: &BTreeMap<Cow<'_, str>, Object<'_>>) -> Result<V
     Ok(filters)
 }
 
-fn parse_filter_name(name: &str) -> Result<FilterKind> {
+fn parse_filter_with_parms(
+    name: &str,
+    parms: Option<&BTreeMap<Cow<'_, str>, Object<'_>>>,
+) -> Result<FilterKind> {
     let clean = name.trim_start_matches('/');
     match clean {
         "FlateDecode" | "Fl" => Ok(FilterKind::FlateDecode),
         "ASCIIHexDecode" | "AHx" => Ok(FilterKind::AsciiHexDecode),
         "ASCII85Decode" | "A85" => Ok(FilterKind::Ascii85Decode),
+        "CCITTFaxDecode" | "CCF" => {
+            let mut ccitt_params = crate::filter::CcittParams::default();
+            if let Some(dict) = parms {
+                if let Some(Object::Integer(k)) = dict.get("K") {
+                    ccitt_params.k = *k as i32;
+                }
+                if let Some(Object::Boolean(eol)) = dict.get("EndOfLine") {
+                    ccitt_params.end_of_line = *eol;
+                }
+                if let Some(Object::Boolean(b1)) = dict.get("BlackIs1") {
+                    ccitt_params.black_is1 = *b1;
+                }
+                if let Some(Object::Integer(cols)) = dict.get("Columns") {
+                    ccitt_params.columns = (*cols).max(1) as u32;
+                }
+                if let Some(Object::Integer(rows)) = dict.get("Rows") {
+                    ccitt_params.rows = (*rows).max(0) as u32;
+                }
+                if let Some(Object::Boolean(eob)) = dict.get("EndOfBlock") {
+                    ccitt_params.end_of_block = *eob;
+                }
+                if let Some(Object::Boolean(align)) = dict.get("EncodedByteAlign") {
+                    ccitt_params.encoded_byte_align = *align;
+                }
+            }
+            Ok(FilterKind::CCITTFaxDecode {
+                params: Some(Box::new(ccitt_params)),
+            })
+        }
+        "JBIG2Decode" => {
+            let mut jbig2_params = crate::filter::Jbig2Params::default();
+            if let Some(dict) = parms {
+                if let Some(Object::Stream { data, .. }) = dict.get("JBIG2Globals") {
+                    jbig2_params.globals = Some(data.to_vec());
+                }
+            }
+            Ok(FilterKind::JBIG2Decode {
+                params: Some(Box::new(jbig2_params)),
+            })
+        }
         _ => Err(Error::UnsupportedFilter {
             name: clean.to_string(),
         }),
@@ -749,13 +828,96 @@ fn resolve_to_unicode_cmap(
     CMap::parse(&stream_bytes).ok()
 }
 
+/// Attempts to locate and parse an embedded font (/FontFile2 for TrueType, /FontFile3 for CFF)
+/// from the font dictionary or its descriptor.
+fn resolve_embedded_font(
+    doc: &Document<'_>,
+    font_dict: &BTreeMap<Cow<'_, str>, Object<'_>>,
+) -> Option<EmbeddedFont> {
+    // 1. Resolve /FontDescriptor
+    let desc_dict: Option<BTreeMap<Cow<'static, str>, Object<'static>>> = if let Some(desc_obj) = font_dict.get("FontDescriptor") {
+        match desc_obj {
+            Object::Dictionary(d) => Some(d.clone().into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+            Object::Reference { id, .. } => match doc.get_object(*id) {
+                Ok(Some(Object::Dictionary(d))) => Some(d.into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                _ => None,
+            },
+            _ => None,
+        }
+    } else if let Some(Object::Array(descendants)) = font_dict.get("DescendantFonts") {
+        match descendants.first() {
+            Some(Object::Dictionary(d)) => match d.get("FontDescriptor") {
+                Some(Object::Dictionary(desc)) => Some(desc.clone().into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                Some(Object::Reference { id, .. }) => match doc.get_object(*id) {
+                    Ok(Some(Object::Dictionary(desc))) => Some(desc.into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                    _ => None,
+                },
+                _ => None,
+            },
+            Some(Object::Reference { id, .. }) => match doc.get_object(*id) {
+                Ok(Some(Object::Dictionary(d))) => match d.get("FontDescriptor") {
+                    Some(Object::Dictionary(desc)) => Some(desc.clone().into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                    Some(Object::Reference { id: desc_id, .. }) => match doc.get_object(*desc_id) {
+                        Ok(Some(Object::Dictionary(desc))) => Some(desc.into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                        _ => None,
+                    },
+                    _ => None,
+                },
+                _ => None,
+            },
+            _ => None,
+        }
+    } else {
+        None
+    };
+
+    // 2. Check /FontFile2 (TrueType) in FontDescriptor, or fallback directly on font_dict
+    let ff2_obj = desc_dict
+        .as_ref()
+        .and_then(|d| d.get("FontFile2"))
+        .or_else(|| font_dict.get("FontFile2"));
+
+    if let Some(ff2) = ff2_obj {
+        if let Ok(bytes) = resolve_stream_bytes(doc, ff2) {
+            if !bytes.is_empty() {
+                if let Ok(ttf) = TrueTypeFont::parse(&bytes) {
+                    return Some(EmbeddedFont::TrueType(ttf));
+                }
+            }
+        }
+    }
+
+    // 3. Check /FontFile3 (CFF) in FontDescriptor, or fallback directly on font_dict
+    let ff3_obj = desc_dict
+        .as_ref()
+        .and_then(|d| d.get("FontFile3"))
+        .or_else(|| font_dict.get("FontFile3"));
+
+    if let Some(ff3) = ff3_obj {
+        if let Ok(bytes) = resolve_stream_bytes(doc, ff3) {
+            if !bytes.is_empty() {
+                if let Ok(cff) = CffFont::parse(&bytes) {
+                    return Some(EmbeddedFont::Cff(cff));
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Gathers font encodings and ToUnicode CMaps defined in the page dictionary or its inherited resources.
 fn collect_font_resources(
     doc: &Document<'_>,
     page_dict: &BTreeMap<Cow<'_, str>, Object<'_>>,
-) -> (HashMap<String, FontEncoding>, HashMap<String, CMap>) {
+) -> (
+    HashMap<String, FontEncoding>,
+    HashMap<String, CMap>,
+    HashMap<String, EmbeddedFont>,
+) {
     let mut encodings = HashMap::new();
     let mut cmaps = HashMap::new();
+    let mut embedded_fonts = HashMap::new();
 
     // Check direct /Resources or inherit from /Parent
     let mut resources_obj = page_dict.get("Resources");
@@ -785,12 +947,12 @@ fn collect_font_resources(
 
     let res_dict = match res_dict {
         Some(d) => d,
-        None => return (encodings, cmaps),
+        None => return (encodings, cmaps, embedded_fonts),
     };
 
     let font_obj = match res_dict.get("Font") {
         Some(f) => f,
-        None => return (encodings, cmaps),
+        None => return (encodings, cmaps, embedded_fonts),
     };
 
     let font_dict = match font_obj {
@@ -804,7 +966,7 @@ fn collect_font_resources(
 
     let font_dict = match font_dict {
         Some(d) => d,
-        None => return (encodings, cmaps),
+        None => return (encodings, cmaps, embedded_fonts),
     };
 
     for (font_name, font_val) in font_dict.iter() {
@@ -831,6 +993,11 @@ fn collect_font_resources(
             };
 
             let maybe_cmap = resolve_to_unicode_cmap(doc, &f_dict);
+            let maybe_embedded = if maybe_cmap.is_none() {
+                resolve_embedded_font(doc, &f_dict)
+            } else {
+                None
+            };
 
             let clean = font_name.trim_start_matches('/').to_string();
             encodings.insert(font_name.to_string(), encoding);
@@ -838,12 +1005,21 @@ fn collect_font_resources(
 
             if let Some(cmap) = maybe_cmap {
                 cmaps.insert(font_name.to_string(), cmap.clone());
-                cmaps.insert(clean, cmap);
+                cmaps.insert(clean.clone(), cmap);
+            } else if let Some(ref embedded) = maybe_embedded {
+                let embedded_cmap = embedded.to_cmap();
+                cmaps.insert(font_name.to_string(), embedded_cmap.clone());
+                cmaps.insert(clean.clone(), embedded_cmap);
+            }
+
+            if let Some(embedded) = maybe_embedded {
+                embedded_fonts.insert(font_name.to_string(), embedded.clone());
+                embedded_fonts.insert(clean, embedded);
             }
         }
     }
 
-    (encodings, cmaps)
+    (encodings, cmaps, embedded_fonts)
 }
 
 #[allow(dead_code)]
@@ -887,17 +1063,287 @@ pub fn extract_page_text(doc: &Document<'_>, page_id: u32) -> Result<String> {
         return Ok(String::new());
     }
 
-    let (font_encodings, font_cmaps) = collect_font_resources(doc, page_dict);
+    let (font_encodings, font_cmaps, font_embedded) = collect_font_resources(doc, page_dict);
 
     let mut parser = ContentParser::new(&decompressed_content);
     let operations = parser.parse()?;
 
     let mut extractor = TextExtractor::new()
         .with_font_encodings(font_encodings)
-        .with_font_cmaps(font_cmaps);
+        .with_font_cmaps(font_cmaps)
+        .with_font_embedded(font_embedded);
     let text = extractor.extract(&operations);
 
     Ok(text)
+}
+
+#[derive(Default)]
+struct ExtendedFontResources {
+    encodings: HashMap<String, FontEncoding>,
+    cmaps: HashMap<String, CMap>,
+    widths: HashMap<String, HashMap<u32, f32>>,
+    missing_widths: HashMap<String, f32>,
+    font_info: HashMap<String, FontInfo>,
+}
+
+fn collect_extended_font_resources(
+    doc: &Document<'_>,
+    page_dict: &BTreeMap<Cow<'_, str>, Object<'_>>,
+) -> ExtendedFontResources {
+    let mut encodings = HashMap::new();
+    let mut cmaps = HashMap::new();
+    let mut widths = HashMap::new();
+    let mut missing_widths = HashMap::new();
+    let mut font_info = HashMap::new();
+
+    let mut resources_obj = page_dict.get("Resources");
+    let mut parent_owned = None;
+
+    if resources_obj.is_none() {
+        if let Some(Object::Reference { id: parent_id, .. }) = page_dict.get("Parent") {
+            if let Ok(Some(parent)) = doc.get_object(*parent_id) {
+                if let Some(dict) = parent.as_dict() {
+                    if let Some(r) = dict.get("Resources") {
+                        parent_owned = Some(r.clone());
+                    }
+                }
+            }
+        }
+        resources_obj = parent_owned.as_ref();
+    }
+
+    let res_dict = match resources_obj {
+        Some(Object::Dictionary(d)) => Some(Cow::Borrowed(d)),
+        Some(Object::Reference { id, .. }) => match doc.get_object(*id) {
+            Ok(Some(Object::Dictionary(d))) => Some(Cow::Owned(d)),
+            _ => None,
+        },
+        _ => None,
+    };
+
+    let res_dict = match res_dict {
+        Some(d) => d,
+        None => {
+            return ExtendedFontResources {
+                encodings,
+                cmaps,
+                widths,
+                missing_widths,
+                font_info,
+            }
+        }
+    };
+
+    let font_obj = match res_dict.get("Font") {
+        Some(f) => f,
+        None => {
+            return ExtendedFontResources {
+                encodings,
+                cmaps,
+                widths,
+                missing_widths,
+                font_info,
+            }
+        }
+    };
+
+    let font_dict = match font_obj {
+        Object::Dictionary(d) => Some(Cow::Borrowed(d)),
+        Object::Reference { id, .. } => match doc.get_object(*id) {
+            Ok(Some(Object::Dictionary(d))) => Some(Cow::Owned(d)),
+            _ => None,
+        },
+        _ => None,
+    };
+
+    let font_dict = match font_dict {
+        Some(d) => d,
+        None => {
+            return ExtendedFontResources {
+                encodings,
+                cmaps,
+                widths,
+                missing_widths,
+                font_info,
+            }
+        }
+    };
+
+    for (font_name, font_val) in font_dict.iter() {
+        let single_font_dict = match font_val {
+            Object::Dictionary(d) => Some(Cow::Borrowed(d)),
+            Object::Reference { id, .. } => match doc.get_object(*id) {
+                Ok(Some(Object::Dictionary(d))) => Some(Cow::Owned(d)),
+                _ => None,
+            },
+            _ => None,
+        };
+
+        if let Some(f_dict) = single_font_dict {
+            let encoding = match f_dict.get("Encoding") {
+                Some(Object::Name(enc_name)) => FontEncoding::from_name(enc_name),
+                Some(Object::Dictionary(enc_dict)) => {
+                    if let Some(Object::Name(base_enc)) = enc_dict.get("BaseEncoding") {
+                        FontEncoding::from_name(base_enc)
+                    } else {
+                        FontEncoding::WinAnsiEncoding
+                    }
+                }
+                _ => FontEncoding::WinAnsiEncoding,
+            };
+
+            let maybe_cmap = resolve_to_unicode_cmap(doc, &f_dict);
+
+            let clean = font_name.trim_start_matches('/').to_string();
+            encodings.insert(font_name.to_string(), encoding);
+            encodings.insert(clean.clone(), encoding);
+
+            if let Some(cmap) = maybe_cmap {
+                cmaps.insert(font_name.to_string(), cmap.clone());
+                cmaps.insert(clean.clone(), cmap);
+            } else if let Some(embedded) = resolve_embedded_font(doc, &f_dict) {
+                let embedded_cmap = embedded.to_cmap();
+                cmaps.insert(font_name.to_string(), embedded_cmap.clone());
+                cmaps.insert(clean.clone(), embedded_cmap);
+            }
+
+            let first_char = match f_dict.get("FirstChar") {
+                Some(Object::Integer(i)) => *i as u32,
+                _ => 0,
+            };
+            if let Some(widths_obj) = f_dict.get("Widths") {
+                let widths_arr = match widths_obj {
+                    Object::Array(arr) => Some(Cow::Borrowed(arr)),
+                    Object::Reference { id, .. } => match doc.get_object(*id) {
+                        Ok(Some(Object::Array(arr))) => Some(Cow::Owned(arr)),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                if let Some(arr) = widths_arr {
+                    let mut char_widths = HashMap::new();
+                    for (idx, w_obj) in arr.iter().enumerate() {
+                        let w = match w_obj {
+                            Object::Integer(i) => *i as f32,
+                            Object::Real(r) => *r as f32,
+                            _ => 0.0,
+                        };
+                        char_widths.insert(first_char + idx as u32, w);
+                    }
+                    widths.insert(font_name.to_string(), char_widths.clone());
+                    widths.insert(clean.clone(), char_widths);
+                }
+            }
+
+            let desc_dict = match f_dict.get("FontDescriptor") {
+                Some(Object::Dictionary(d)) => Some(Cow::Borrowed(d)),
+                Some(Object::Reference { id, .. }) => match doc.get_object(*id) {
+                    Ok(Some(Object::Dictionary(d))) => Some(Cow::Owned(d)),
+                    _ => None,
+                },
+                _ => None,
+            };
+
+            if let Some(desc) = desc_dict {
+                let mut info = FontInfo::default();
+                if let Some(Object::Integer(flags)) = desc.get("Flags") {
+                    if flags & (1 << 6) != 0 {
+                        info.is_italic = true;
+                    }
+                }
+                if let Some(Object::Integer(weight)) = desc.get("FontWeight") {
+                    if *weight >= 700 {
+                        info.is_bold = true;
+                    }
+                }
+                if let Some(mw) = desc.get("MissingWidth") {
+                    let missing = match mw {
+                        Object::Integer(i) => *i as f32,
+                        Object::Real(r) => *r as f32,
+                        _ => 500.0,
+                    };
+                    missing_widths.insert(font_name.to_string(), missing);
+                    missing_widths.insert(clean.clone(), missing);
+                }
+                font_info.insert(font_name.to_string(), info);
+                font_info.insert(clean, info);
+            }
+        }
+    }
+
+    ExtendedFontResources {
+        encodings,
+        cmaps,
+        widths,
+        missing_widths,
+        font_info,
+    }
+}
+
+/// Reads the page dictionary, decompresses `/Contents`, parses operations,
+/// tracks the transformation matrix and graphics state, and extracts positioned text spans (§1.4).
+pub fn extract_page_spans(doc: &Document<'_>, page_id: u32) -> Result<Vec<TextSpan<'static>>> {
+    let page_obj = match doc.get_object(page_id)? {
+        Some(obj) => obj,
+        None => {
+            return Err(Error::SyntaxError {
+                offset: 0,
+                message: "Page object not found in document",
+            })
+        }
+    };
+
+    let page_dict = match page_obj.as_dict() {
+        Some(dict) => dict,
+        None => {
+            return Err(Error::SyntaxError {
+                offset: 0,
+                message: "Page object is not a dictionary",
+            })
+        }
+    };
+
+    let contents_obj = match page_dict.get("Contents") {
+        Some(c) => c,
+        None => return Ok(Vec::new()), // Empty page with no contents
+    };
+
+    let decompressed_content = resolve_stream_bytes(doc, contents_obj)?;
+    if decompressed_content.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let font_res = collect_extended_font_resources(doc, page_dict);
+
+    let mut parser = ContentParser::new(&decompressed_content);
+    let operations = parser.parse()?;
+
+    let mut tracker = GraphicsStateTracker::new()
+        .with_font_encodings(font_res.encodings)
+        .with_font_cmaps(font_res.cmaps)
+        .with_font_widths(font_res.widths)
+        .with_font_missing_widths(font_res.missing_widths)
+        .with_font_info(font_res.font_info);
+
+    let spans = tracker.process_operations(&operations);
+    Ok(spans)
+}
+
+impl<'a> Document<'a> {
+    /// Extracts spatial text spans with device-space bounding boxes and transformation matrices from a page (§1.4).
+    pub fn extract_spans(&self, page_id: u32) -> Result<Vec<TextSpan<'static>>> {
+        extract_page_spans(self, page_id)
+    }
+
+    /// Extracts spatial text spans for all pages in document order (§1.4).
+    pub fn extract_spans_all(&self) -> Result<Vec<Vec<TextSpan<'static>>>> {
+        let page_ids = self.get_page_ids()?;
+        let mut pages = Vec::with_capacity(page_ids.len());
+        for id in page_ids {
+            pages.push(self.extract_spans(id)?);
+        }
+        Ok(pages)
+    }
 }
 
 #[cfg(test)]
@@ -1193,5 +1639,252 @@ mod tests {
         let doc = Document::load(&pdf).expect("Document load failed");
         let text = doc.extract_text(3).expect("Extract page text failed");
         assert_eq!(text, "fi fl HI!");
+    }
+
+    #[test]
+    fn test_synthetic_pdf_extract_spans_with_ctm_and_matrices() {
+        let mut pdf = Vec::new();
+        pdf.extend_from_slice(b"%PDF-1.4\n");
+        // 1: Catalog
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        // 2: Pages root with 2 pages
+        pdf.extend_from_slice(
+            b"2 0 obj\n<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>\nendobj\n",
+        );
+        // 3: Page 1 with CTM scaling + translation
+        pdf.extend_from_slice(
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /Contents 5 0 R >>\nendobj\n",
+        );
+        // 4: Page 2 with bold font TJ kerning
+        pdf.extend_from_slice(
+            b"4 0 obj\n<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>\nendobj\n",
+        );
+
+        // Stream 5: CTM + multiline text
+        let s5 = b"q 2 0 0 2 50 100 cm BT /Helvetica 12 Tf 14 TL 10 20 Td (First Span) Tj T* (Second Span) Tj ET Q";
+        pdf.extend_from_slice(format!("5 0 obj\n<< /Length {} >>\nstream\n", s5.len()).as_bytes());
+        pdf.extend_from_slice(s5);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+
+        // Stream 6: Bold font TJ kerning
+        let s6 = b"BT /Helvetica-Bold 16 Tf 0 500 Td [(Hello) -250 (World)] TJ ET";
+        pdf.extend_from_slice(format!("6 0 obj\n<< /Length {} >>\nstream\n", s6.len()).as_bytes());
+        pdf.extend_from_slice(s6);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+
+        pdf.extend_from_slice(b"trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n0\n%%EOF");
+
+        let doc = Document::load(&pdf).expect("Document load failed");
+
+        // Test single page span extraction on page 1 (object 3)
+        let page1_spans = doc.extract_spans(3).expect("Extract spans page 1 failed");
+        assert_eq!(page1_spans.len(), 2);
+
+        let s1 = &page1_spans[0];
+        assert_eq!(s1.text, "First Span");
+        assert_eq!(s1.font_name, "Helvetica");
+        assert_eq!(s1.font_size, 12.0);
+        assert!(!s1.is_bold);
+        assert!(!s1.is_italic);
+        // CTM = [2 0 0 2 50 100], Tm = [1 0 0 1 10 20]
+        // Tdevice = Tm * CTM => a=2, d=2, e=70, f=140
+        assert_eq!(s1.transform.a, 2.0);
+        assert_eq!(s1.transform.d, 2.0);
+        assert_eq!(s1.transform.e, 70.0);
+        assert_eq!(s1.transform.f, 140.0);
+        assert_eq!(s1.bbox.min_x, 70.0);
+        assert_eq!(s1.bbox.min_y, 140.0);
+
+        let s2 = &page1_spans[1];
+        assert_eq!(s2.text, "Second Span");
+        // T* moves y by -14 leading in text space: 20 - 14 = 6
+        // in device space: 6 * 2 + 100 = 112
+        assert_eq!(s2.transform.e, 70.0);
+        assert_eq!(s2.transform.f, 112.0);
+        assert_eq!(s2.bbox.min_x, 70.0);
+        assert_eq!(s2.bbox.min_y, 112.0);
+
+        // Test page 2 (object 4)
+        let page2_spans = doc.extract_spans(4).expect("Extract spans page 2 failed");
+        assert_eq!(page2_spans.len(), 1);
+        assert_eq!(page2_spans[0].text, "Hello World");
+        assert_eq!(page2_spans[0].font_name, "Helvetica-Bold");
+        assert_eq!(page2_spans[0].font_size, 16.0);
+        assert!(page2_spans[0].is_bold);
+        assert!(!page2_spans[0].is_italic);
+
+        // Test extract_spans_all
+        let all_spans = doc.extract_spans_all().expect("Extract all spans failed");
+        assert_eq!(all_spans.len(), 2);
+        assert_eq!(all_spans[0].len(), 2);
+        assert_eq!(all_spans[1].len(), 1);
+    }
+
+    #[test]
+    fn test_synthetic_pdf_embedded_truetype_font_introspection() {
+        // Construct a synthetic TrueType font with post Version 2.0:
+        // GID 1 -> "fi" ('ﬁ')
+        // GID 2 -> "ampersand" ('&')
+        let mut post = vec![0u8; 32];
+        post[0..4].copy_from_slice(&0x00020000u32.to_be_bytes()); // Version 2.0
+        post.extend_from_slice(&3u16.to_be_bytes()); // numGlyphs = 3
+        post.extend_from_slice(&0u16.to_be_bytes()); // GID 0: .notdef (idx 0)
+        post.extend_from_slice(&258u16.to_be_bytes()); // GID 1: custom string 0 -> "fi"
+        post.extend_from_slice(&259u16.to_be_bytes()); // GID 2: custom string 1 -> "ampersand"
+        // Pascal strings:
+        post.push(2);
+        post.extend_from_slice(b"fi");
+        post.push(9);
+        post.extend_from_slice(b"ampersand");
+
+        // Build SFNT font
+        let mut ttf = Vec::new();
+        ttf.extend_from_slice(&0x00010000u32.to_be_bytes()); // sfntVersion
+        ttf.extend_from_slice(&1u16.to_be_bytes()); // numTables = 1
+        ttf.extend_from_slice(&0u16.to_be_bytes());
+        ttf.extend_from_slice(&0u16.to_be_bytes());
+        ttf.extend_from_slice(&0u16.to_be_bytes());
+
+        let table_offset = 12 + 16;
+        ttf.extend_from_slice(b"post");
+        ttf.extend_from_slice(&0u32.to_be_bytes()); // checksum
+        ttf.extend_from_slice(&(table_offset as u32).to_be_bytes());
+        ttf.extend_from_slice(&(post.len() as u32).to_be_bytes());
+        ttf.extend_from_slice(&post);
+
+        // Content stream displaying GID 1 and GID 2 (<00010002>)
+        let content_stream = b"BT /F1 12 Tf <00010002> Tj ET";
+
+        let mut pdf = Vec::new();
+        pdf.extend_from_slice(b"%PDF-1.4\n");
+        // 1: Catalog
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        // 2: Pages root
+        pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        // 3: Page with font resource referencing font 4
+        pdf.extend_from_slice(
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+        );
+        // 4: Font dictionary without ToUnicode, referencing FontDescriptor 6
+        pdf.extend_from_slice(
+            b"4 0 obj\n<< /Type /Font /Subtype /TrueType /BaseFont /CustomTTF /FontDescriptor 6 0 R >>\nendobj\n",
+        );
+        // 5: Contents stream
+        pdf.extend_from_slice(
+            format!("5 0 obj\n<< /Length {} >>\nstream\n", content_stream.len()).as_bytes(),
+        );
+        pdf.extend_from_slice(content_stream);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        // 6: FontDescriptor referencing FontFile2 stream 7
+        pdf.extend_from_slice(
+            b"6 0 obj\n<< /Type /FontDescriptor /FontName /CustomTTF /FontFile2 7 0 R >>\nendobj\n",
+        );
+        // 7: FontFile2 stream
+        pdf.extend_from_slice(
+            format!("7 0 obj\n<< /Length {} >>\nstream\n", ttf.len()).as_bytes(),
+        );
+        pdf.extend_from_slice(&ttf);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+
+        pdf.extend_from_slice(b"trailer\n<< /Size 8 /Root 1 0 R >>\nstartxref\n0\n%%EOF");
+
+        let doc = Document::load(&pdf).expect("Document load failed");
+        let text = doc.extract_text(3).expect("Extract page text failed");
+        assert_eq!(text, "ﬁ&");
+    }
+
+    #[test]
+    fn test_synthetic_pdf_embedded_cff_font_introspection() {
+        // Construct a synthetic CFF font with:
+        // GID 1 -> Standard SID 34 ('A')
+        // GID 2 -> Custom String 0 (SID 391) -> "uni0042" ('B')
+        let mut cff = Vec::new();
+        // Header
+        cff.extend_from_slice(&[1, 0, 4, 1]);
+        // Name INDEX
+        cff.extend_from_slice(&1u16.to_be_bytes()); // count = 1
+        cff.push(1); // offSize = 1
+        cff.push(1); // off 0
+        cff.push(1 + 7); // off 1
+        cff.extend_from_slice(b"CFFTest");
+
+        // Top DICT INDEX placeholder (30 bytes)
+        let dummy_len = 30;
+        cff.extend_from_slice(&1u16.to_be_bytes());
+        cff.push(1);
+        cff.push(1);
+        cff.push(1 + dummy_len as u8);
+        let top_dict_data_start = cff.len();
+        cff.extend_from_slice(&vec![0u8; dummy_len]);
+
+        // String INDEX: 1 custom string "uni0042"
+        let custom_str = b"uni0042";
+        cff.extend_from_slice(&1u16.to_be_bytes()); // count = 1
+        cff.push(2); // offSize = 2
+        cff.extend_from_slice(&1u16.to_be_bytes()); // off 0 = 1
+        cff.extend_from_slice(&(1 + custom_str.len() as u16).to_be_bytes()); // off 1
+        cff.extend_from_slice(custom_str);
+
+        // Charset (Format 0): GID 1 -> SID 34 ('A'), GID 2 -> SID 391 ('B')
+        let charset_pos = cff.len();
+        cff.push(0); // format 0
+        cff.extend_from_slice(&34u16.to_be_bytes()); // GID 1
+        cff.extend_from_slice(&391u16.to_be_bytes()); // GID 2
+
+        // CharStrings INDEX: 3 glyphs (0, 1, 2)
+        let charstrings_pos = cff.len();
+        cff.extend_from_slice(&3u16.to_be_bytes()); // count = 3
+        cff.push(1);
+        cff.push(1);
+        cff.push(2);
+        cff.push(3);
+        cff.push(4);
+        cff.extend_from_slice(&[14, 14, 14]); // endchar
+
+        // Top DICT: charset op 15, CharStrings op 17
+        let mut dict_bytes = Vec::new();
+        dict_bytes.push(29);
+        dict_bytes.extend_from_slice(&(charset_pos as i32).to_be_bytes());
+        dict_bytes.push(15);
+        dict_bytes.push(29);
+        dict_bytes.extend_from_slice(&(charstrings_pos as i32).to_be_bytes());
+        dict_bytes.push(17);
+        while dict_bytes.len() < dummy_len {
+            dict_bytes.push(22);
+        }
+        cff[top_dict_data_start..top_dict_data_start + dummy_len].copy_from_slice(&dict_bytes);
+
+        // Content stream: <00010002>
+        let content_stream = b"BT /F1 12 Tf <00010002> Tj ET";
+
+        let mut pdf = Vec::new();
+        pdf.extend_from_slice(b"%PDF-1.4\n");
+        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        pdf.extend_from_slice(
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+        );
+        pdf.extend_from_slice(
+            b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /CFFTest /FontDescriptor 6 0 R >>\nendobj\n",
+        );
+        pdf.extend_from_slice(
+            format!("5 0 obj\n<< /Length {} >>\nstream\n", content_stream.len()).as_bytes(),
+        );
+        pdf.extend_from_slice(content_stream);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        pdf.extend_from_slice(
+            b"6 0 obj\n<< /Type /FontDescriptor /FontName /CFFTest /FontFile3 7 0 R >>\nendobj\n",
+        );
+        pdf.extend_from_slice(
+            format!("7 0 obj\n<< /Length {} >>\nstream\n", cff.len()).as_bytes(),
+        );
+        pdf.extend_from_slice(&cff);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+
+        pdf.extend_from_slice(b"trailer\n<< /Size 8 /Root 1 0 R >>\nstartxref\n0\n%%EOF");
+
+        let doc = Document::load(&pdf).expect("Document load failed");
+        let text = doc.extract_text(3).expect("Extract page text failed");
+        assert_eq!(text, "AB");
     }
 }

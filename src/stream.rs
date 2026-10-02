@@ -1,13 +1,16 @@
 use crate::error::{Error, Result};
+use crate::filter::{decode_ccitt_fax, decode_jbig2, CcittParams, Jbig2Params};
 use flate2::read::ZlibDecoder;
 use std::io::Read;
 
 /// Strategy for stream data decompression.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterKind {
     FlateDecode,
     AsciiHexDecode,
     Ascii85Decode,
+    CCITTFaxDecode { params: Option<Box<CcittParams>> },
+    JBIG2Decode { params: Option<Box<Jbig2Params>> },
     Identity,
 }
 
@@ -86,6 +89,16 @@ impl<'a> StreamView<'a> {
                 }
                 FilterKind::Ascii85Decode => {
                     current = decode_ascii85(&current)?;
+                }
+                FilterKind::CCITTFaxDecode { params } => {
+                    let default_params = CcittParams::default();
+                    let effective_params = params.as_deref().unwrap_or(&default_params);
+                    current = decode_ccitt_fax(&current, effective_params)?;
+                }
+                FilterKind::JBIG2Decode { params } => {
+                    let default_params = Jbig2Params::default();
+                    let effective_params = params.as_deref().unwrap_or(&default_params);
+                    current = decode_jbig2(&current, effective_params)?;
                 }
                 FilterKind::Identity => {}
             }
@@ -247,5 +260,44 @@ mod tests {
         let stream = StreamView::new(a85_payload).with_filter(FilterKind::Ascii85Decode);
         let decoded = stream.decode().unwrap();
         assert_eq!(decoded, b"Hello world!");
+    }
+
+    #[test]
+    fn test_ccitt_fax_stream() {
+        // Group 4: 2 rows of 8 all-white pixels
+        // Bit stream: 1 1 000000000001 000000000001 000000
+        let bits = [0xC0, 0x04, 0x00, 0x40];
+        let params = crate::filter::CcittParams {
+            k: -1,
+            columns: 8,
+            rows: 2,
+            black_is1: true,
+            ..Default::default()
+        };
+
+        let stream = StreamView::new(&bits).with_filter(FilterKind::CCITTFaxDecode {
+            params: Some(Box::new(params)),
+        });
+        let decoded = stream.decode().unwrap();
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded, vec![0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_jbig2_stream() {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"\x97JB2\r\n\x1a\n");
+        data.push(0x01);
+        data.extend_from_slice(&[0, 0, 0, 1]);
+        data.push(48); // Page info
+        data.push(0);
+        data.push(1);
+        data.extend_from_slice(&[0, 0, 0, 8]);
+        // Width 16, height 8 => (16/8)*8 = 16 bytes
+        data.extend_from_slice(&[0, 0, 0, 16, 0, 0, 0, 8]);
+
+        let stream = StreamView::new(&data).with_filter(FilterKind::JBIG2Decode { params: None });
+        let decoded = stream.decode().unwrap();
+        assert_eq!(decoded.len(), 16);
     }
 }

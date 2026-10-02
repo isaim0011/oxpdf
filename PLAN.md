@@ -1,60 +1,50 @@
-# oxpdf v1.0.1 & Advanced Horizons Master Plan
+# Plan: Implement Missing Compression Filters (§1.3 Phase 1)
 
-## 1. Goal
-Complete the Phase 5 advanced ecosystem features and prepare `oxpdf v1.0.1`:
-1. `/ToUnicode` CMap font parser for glyph-to-Unicode mapping (CJK and subsetted fonts).
-2. Stage B Portable SIMD Lexer (vectorized chunk classification under `feature = "simd"`).
-3. `oxpdf-cli` satellite crate (`inspect`, `extract-text`, `pack`, `bench`).
-4. `oxpdf-wasm` satellite crate (`WasmDocument` for browser and edge JS runtimes).
-5. `cargo-fuzz` continuous fuzzing infrastructure (`lexer`, `parser`, `xref`, `filter` fuzz targets).
-6. Typst architectural and benchmark comparison analysis in `BENCHMARKS.md` and `DESIGN.md`.
-7. Full regression suite verification, version bump to `v1.0.1`, and release.
+## Goal
+Implement pure-Rust CCITTFaxDecode (Group 3 1D/2D and Group 4 2D ITU-T T.6) and JBIG2 stream decoders in `src/filter/`, integrate into `src/stream.rs`, export in `src/lib.rs`, and verify with thorough tests and clippy.
 
-## 2. Architecture & File Layout
-```
-oxpdf/
-  src/
-    text.rs           # enhanced with CMap /ToUnicode stream parser
-    cmap.rs           # /ToUnicode CMap state machine and lookup tables
-    simd.rs           # Stage B chunked classification (SIMD / SWAR)
-    lexer.rs          # wired to fast SIMD classifier when enabled
-  benches/
-    lexer_bench.rs    # updated with SIMD benchmark comparison
-  fuzz/
-    Cargo.toml        # libfuzzer-sys configuration
-    fuzz_targets/
-      lexer.rs
-      parser.rs
-      xref.rs
-      filter.rs
-oxpdf-cli/            # Satellite CLI binary
-  Cargo.toml
-  src/main.rs
-oxpdf-wasm/           # Satellite WebAssembly library
-  Cargo.toml
-  src/lib.rs
-```
+## Components
+1. `src/filter/ccitt.rs`:
+   - Pure-Rust ITU-T T.4 and T.6 decoder.
+   - Support parameters:
+     - `K`: `< 0` -> Group 4 2D (T.6), `0` -> Group 3 1D (T.4), `> 0` -> Group 3 2D (T.4)
+     - `Columns`: default 1728
+     - `Rows`: default 0 (if 0 or unspecified, decode until EOF or EOL/EOFB)
+     - `BlackIs1`: bool, default false (0 = white, 1 = black; if false, white is 0, black is 1)
+     - `EncodedByteAlign`: bool, default false
+     - `EndOfBlock`: bool, default true (Group 4 EOFB detection)
+     - `EndOfLine`: bool, default false
+   - Huffman tables for Modified Huffman (T.4 1D terminating & make-up codes for white and black runs).
+   - 2D modes: Pass mode (P), Vertical modes (V(0), VL(1..3), VR(1..3)), Horizontal mode (H + white run + black run), Extension mode.
+   - Enforce `StreamView::MAX_DECOMPRESS_BYTES = 256 * 1024 * 1024` (256 MB) to prevent zip-bomb / memory exhaustion.
+   - BitReader with MSB-first bitstream reading.
+   - Output bi-level 1-bit per pixel packed bytes (row aligned to byte boundaries per PDF spec: `(columns + 7) / 8` bytes per row).
 
-## 3. Subagent Delegation Matrix
-- **Agent 1 (CMap & Unicode)**: Implement `cmap.rs` and wire into `src/text.rs`.
-- **Agent 2 (SIMD Lexer)**: Implement `src/simd.rs` and fast classification path.
-- **Agent 3 (oxpdf-cli)**: Implement standalone binary crate in `oxpdf-cli/`.
-- **Agent 4 (oxpdf-wasm)**: Implement WebAssembly bindings in `oxpdf-wasm/`.
-- **Agent 5 (cargo-fuzz)**: Implement fuzz harness suite in `fuzz/`.
-- **Agent 6 (Typst & Benchmark)**: Produce architectural and performance comparison against Typst.
+2. `src/filter/jbig2.rs`:
+   - JBIG2 stream decoder skeleton & segment parsing:
+     - Header parsing (optional 8-byte file header vs embedded stream).
+     - Segment parsing (segment number, flags, referred segments, page association, data length).
+     - Global stream / dictionary support (`JBIG2Globals` resolution).
+     - Standard 1-bit bitmap raster output.
+     - Strict size check against `MAX_DECOMPRESS_BYTES`.
 
-## 4. Verification & Release Protocol
-- 100% pass on all unit tests, security audit tests, corpus harness tests, and WASM compilation.
-- Zero warnings under `cargo check` and `-D warnings`.
-- Unified version bump to `1.0.1`.
-- Changelog update and release tag.
+3. `src/filter/mod.rs`:
+   - Expose `decode_ccitt_fax`, `decode_jbig2`, parameter structs `CcittParams`, `Jbig2Params`.
 
-## 5. Execution Status: 100% Complete (Shipped & Verified)
-- [x] **Goal 1 (`/ToUnicode` CMap font parser)**: Implemented in `src/cmap.rs`, supporting `beginbfchar`, `beginbfrange`, surrogate pairs, and multi-codepoint ligatures; wired into `src/text.rs`.
-- [x] **Goal 2 (Stage B Portable SIMD Lexer)**: Implemented in `src/simd.rs` with SWAR portable bitmasks and vectorized 16/32-byte chunk classifiers; wired into `src/lexer.rs`.
-- [x] **Goal 3 (`oxpdf-cli` satellite crate)**: Implemented in `oxpdf-cli/` (`inspect`, `extract-text`, `pack`, `bench`), published live on [crates.io/crates/oxpdf-cli](https://crates.io/crates/oxpdf-cli/1.0.1).
-- [x] **Goal 4 (`oxpdf-wasm` satellite crate)**: Implemented in `oxpdf-wasm/` (`WasmDocument`), tested, published live on [crates.io/crates/oxpdf-wasm](https://crates.io/crates/oxpdf-wasm/1.0.1).
-- [x] **Goal 5 (`cargo-fuzz` infrastructure)**: Implemented in `fuzz/` with 4 targets (`lexer`, `parser`, `xref`, `filter`) and verified build harnesses.
-- [x] **Goal 6 (Typst & Comparative Analysis)**: Comprehensive architectural and benchmark comparison published in `BENCHMARKS.md` and `DESIGN.md`.
-- [x] **Goal 7 (Verification, Release & CI Green)**: Full regression suite passing, zero clippy warnings across all platforms, GitHub Actions CI 8/8 jobs green, `v1.0.1` tag and GitHub Release published.
+4. `src/stream.rs`:
+   - Update `FilterKind` enum:
+     - `CCITTFaxDecode { params: Option<CcittParams> }` (or `Box<CcittParams>`)
+     - `JBIG2Decode { globals: Option<Vec<u8>> }`
+   - Update `StreamView::decode()`:
+     - Match and decode using `src/filter/ccitt.rs` and `src/filter/jbig2.rs`.
+   - Update `extract_stream_filters` and `parse_filter_name` if needed in `text.rs` or `stream.rs`.
 
+5. `src/lib.rs`:
+   - Export `pub mod filter;`.
+
+6. Testing:
+   - Group 4 test vectors (all white, all black, alternating vertical stripes, horizontal blocks, checkerboard).
+   - Mode tests: Pass mode, Vertical modes (V(0), VL(1), VR(2), etc.), Horizontal mode.
+   - Edge cases: EncodedByteAlign, BlackIs1 flag inversion, partial bytes at row ends.
+   - Decompression bomb safety: test that exceeding `MAX_DECOMPRESS_BYTES` returns `Error::Unsupported`.
+   - JBIG2 basic structure / error handling tests.

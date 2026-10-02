@@ -52,6 +52,9 @@ pub enum Error {
 
     #[error("Unsupported feature: {0}")]
     Unsupported(&'static str),
+
+    #[error("Decryption error: {0}")]
+    Decryption(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

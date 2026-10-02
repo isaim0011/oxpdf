@@ -100,6 +100,7 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
 
     // Step 5: Locate trailer keyword or synthesize catalog trailer
     let mut trailer_dict: Option<std::collections::BTreeMap<String, String>> = None;
+    let mut trailer_objects: Option<std::collections::BTreeMap<String, Object<'static>>> = None;
     let trailer_finder = memmem::Finder::new(b"trailer");
 
     // Scan backwards from EOF for "trailer" keyword
@@ -108,6 +109,7 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
         let mut parser = Parser::new(after_trailer);
         if let Ok(Some(Object::Dictionary(dict))) = parser.parse_object() {
             let mut string_dict = std::collections::BTreeMap::new();
+            let mut owned_map = std::collections::BTreeMap::new();
             for (k, v) in dict {
                 let val = match &v {
                     Object::Reference { id, .. } => id.to_string(),
@@ -115,9 +117,11 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
                     Object::Name(n) => n.to_string(),
                     _ => format!("{v:?}"),
                 };
-                string_dict.insert(k.into_owned(), val);
+                string_dict.insert(k.to_string(), val);
+                owned_map.insert(k.into_owned(), v.into_owned());
             }
             trailer_dict = Some(string_dict);
+            trailer_objects = Some(owned_map);
             // Later trailer (closer to EOF) wins in incremental update model
         }
     }
@@ -148,5 +152,6 @@ pub fn repair(data: &[u8]) -> Result<XRefTable> {
     }
 
     table.trailer_dict = trailer_dict;
+    table.trailer = trailer_objects;
     Ok(table)
 }

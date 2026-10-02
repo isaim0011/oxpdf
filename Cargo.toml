@@ -19,6 +19,10 @@ flate2 = { version = "1.0", default-features = false, features = ["rust_backend"
 thiserror = "2.0"
 log = "0.4"
 smallvec = { version = "1.13", features = ["const_generics", "union"] }
+aes = "0.8"
+cbc = "0.1"
+md-5 = "0.10"
+sha2 = "0.10"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 memmap2 = "0.9"

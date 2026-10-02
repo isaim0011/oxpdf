@@ -44,3 +44,27 @@ name = "filter"
 path = "fuzz_targets/filter.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "crypto"
+path = "fuzz_targets/crypto.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "matrix"
+path = "fuzz_targets/matrix.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "font"
+path = "fuzz_targets/font.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ccitt"
+path = "fuzz_targets/ccitt.rs"
+test = false
+doc = false

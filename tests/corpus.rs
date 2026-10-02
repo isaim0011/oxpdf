@@ -150,6 +150,7 @@ fn test_corpus_verification_harness() {
                     oxpdf::Error::RecoveryFailed { .. } => "RecoveryFailed",
                     oxpdf::Error::Io(_) => "Io",
                     oxpdf::Error::Unsupported(_) => "Unsupported",
+                    oxpdf::Error::Decryption(_) => "Decryption",
                 };
                 *metrics
                     .failures_by_type

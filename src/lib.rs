@@ -1,7 +1,11 @@
 pub mod cmap;
 pub mod content;
+pub mod crypto;
 pub mod document;
 pub mod error;
+pub mod filter;
+pub mod font;
+pub mod geom;
 pub mod lexer;
 pub mod parser;
 pub mod recover;
@@ -15,8 +19,11 @@ pub mod xref;
 
 pub use cmap::CMap;
 pub use content::{ContentLexer, ContentParser, Operation, Operator};
+pub use crypto::{CipherAlgorithm, EncryptionParams, StandardSecurityHandler};
 pub use document::Document;
 pub use error::{Error, Result};
+pub use font::{AdobeGlyphList, CffFont, EmbeddedFont, TrueTypeFont};
+pub use geom::{GraphicsStateTracker, Matrix, Point, Rect, TextSpan};
 pub use lexer::{Lexer, Token};
 #[cfg(not(target_arch = "wasm32"))]
 pub use source::MmapSource;

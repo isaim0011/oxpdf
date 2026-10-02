@@ -176,6 +176,11 @@ impl CMap {
         self.mappings.insert(code, target);
     }
 
+    #[inline]
+    pub fn set_has_2byte_codes(&mut self, val: bool) {
+        self.has_2byte_codes = val;
+    }
+
     /// Parses a CMap stream into a `CMap` instance.
     pub fn parse(stream_bytes: &[u8]) -> Result<Self> {
         let mut cmap = CMap::default();

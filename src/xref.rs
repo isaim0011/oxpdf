@@ -32,6 +32,7 @@ pub enum XRefEntry {
 pub struct XRefTable {
     pub entries: BTreeMap<u32, XRefEntry>,
     pub trailer_dict: Option<BTreeMap<String, String>>, // key info like /Root, /Info, /Size
+    pub trailer: Option<BTreeMap<String, Object<'static>>>,
 }
 
 impl XRefTable {
@@ -305,14 +306,23 @@ impl XRefTable {
             }
         }
 
-        // Extract /Root and /Info for trailer_dict (only on first/latest xref)
+        if table.trailer.is_none() {
+            let mut owned_map = std::collections::BTreeMap::new();
+            for (k, v) in &dict {
+                owned_map.insert(k.to_string(), v.clone().into_owned());
+            }
+            table.trailer = Some(owned_map);
+        }
         if table.trailer_dict.is_none() {
             let mut trailer_map = std::collections::BTreeMap::new();
-            if let Some(Object::Reference { id, .. }) = dict.get("Root") {
-                trailer_map.insert("Root".to_string(), id.to_string());
-            }
-            if let Some(Object::Integer(s)) = dict.get("Size") {
-                trailer_map.insert("Size".to_string(), s.to_string());
+            for (k, v) in &dict {
+                let val = match v {
+                    Object::Reference { id, .. } => id.to_string(),
+                    Object::Integer(s) => s.to_string(),
+                    Object::Name(n) => n.to_string(),
+                    _ => format!("{v:?}"),
+                };
+                trailer_map.insert(k.to_string(), val);
             }
             if !trailer_map.is_empty() {
                 table.trailer_dict = Some(trailer_map);
@@ -373,14 +383,24 @@ impl XRefTable {
                 };
                 let mut parser = Parser::new(&data[abs_pos..]);
                 if let Ok(Some(Object::Dictionary(dict))) = parser.parse_object() {
-                    let mut trailer_map = BTreeMap::new();
-                    if let Some(Object::Reference { id, .. }) = dict.get("Root") {
-                        trailer_map.insert("Root".to_string(), id.to_string());
-                    }
-                    if let Some(Object::Integer(size)) = dict.get("Size") {
-                        trailer_map.insert("Size".to_string(), size.to_string());
+                    if table.trailer.is_none() {
+                        let mut owned_map = BTreeMap::new();
+                        for (k, v) in &dict {
+                            owned_map.insert(k.to_string(), v.clone().into_owned());
+                        }
+                        table.trailer = Some(owned_map);
                     }
                     if table.trailer_dict.is_none() {
+                        let mut trailer_map = BTreeMap::new();
+                        for (k, v) in &dict {
+                            let val = match v {
+                                Object::Reference { id, .. } => id.to_string(),
+                                Object::Integer(size) => size.to_string(),
+                                Object::Name(n) => n.to_string(),
+                                _ => format!("{v:?}"),
+                            };
+                            trailer_map.insert(k.to_string(), val);
+                        }
                         table.trailer_dict = Some(trailer_map);
                     }
                     if let Some(Object::Integer(prev)) = dict.get("Prev") {

@@ -2,7 +2,6 @@ target/
 **/target/
 /corpus
 *.pdf
-
-
+.agents/
 corpus_stderr.txt
 *.stderr.txt
