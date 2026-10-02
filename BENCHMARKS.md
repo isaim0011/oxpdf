@@ -52,7 +52,7 @@ A holistic empirical and architectural benchmark comparing `oxpdf` against major
 
 | Engine | Ecosystem / Language | Ingestion Throughput | Median Latency ($p_{50}$) | Peak RSS (10MB+ File) | Memory Model | Memory Safety | Licensing |
 |---|---|:---:|:---:|:---:|---|:---:|---|
-| **`oxpdf`** (v1.0.2) | **Pure Rust** | **1,532 – 2,348 MB/s** | **0.007 – 0.014 ms** | **<32 MB bounded** (108 KB net heap) | **Streaming Zero-Copy Index** | **Safe (0 panics, memory-safe)** | **MIT / Apache-2.0** |
+| **`oxpdf`** (v1.0.3) | **Pure Rust** | **1,532 – 2,348 MB/s** | **0.007 – 0.014 ms** | **<32 MB bounded** (108 KB net heap) | **Streaming Zero-Copy Index** | **Safe (0 panics, memory-safe)** | **MIT / Apache-2.0** |
 | **`lopdf`** (v0.36.0) | Pure Rust | 22.9 – 23.7 MB/s | 0.200 – 0.227 ms | ~24.9 MB (+10.6 MB heap) | Full In-Memory DOM Tree | Safe | MIT |
 | **`pdf` crate** (v0.9.0) | Pure Rust | ~45 – 65 MB/s | 0.140 – 0.180 ms | ~35.0 MB | Typed Struct Mapping | Safe | MIT |
 | **`MuPDF / fitz`** (v1.24) | C / Native | ~280 – 420 MB/s | 0.045 – 0.090 ms | ~45 – 80 MB | C Heap Allocator | Unsafe (C pointer arithmetic) | AGPL / Commercial |

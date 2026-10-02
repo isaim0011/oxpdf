@@ -53,7 +53,7 @@ Comprehensive empirical comparison across primary PDF engines and language runti
 
 | Engine | Ecosystem / Runtime | Throughput | Median Latency ($p_{50}$) | Peak RSS (10MB+ File) | Memory Model | Memory Safety |
 |---|---|:---:|:---:|:---:|---|:---:|
-| **`oxpdf`** (v1.0.2) | **Pure Rust** | **1,532 – 2,348 MB/s** | **0.007 – 0.014 ms** | **<32 MB bounded** (108 KB net heap) | **Streaming Zero-Copy Index** | **Memory Safe (0 panics)** |
+| **`oxpdf`** (v1.0.3) | **Pure Rust** | **1,532 – 2,348 MB/s** | **0.007 – 0.014 ms** | **<32 MB bounded** (108 KB net heap) | **Streaming Zero-Copy Index** | **Memory Safe (0 panics)** |
 | **`lopdf`** (v0.36.0) | Pure Rust | 22.9 – 23.7 MB/s | 0.200 – 0.227 ms | ~24.9 MB (+10.6 MB heap) | In-Memory DOM Tree | Memory Safe |
 | **`pdf` crate** (v0.9.0) | Pure Rust | ~45 – 65 MB/s | 0.140 – 0.180 ms | ~35.0 MB | Typed Struct Mapping | Memory Safe |
 | **`MuPDF`** (v1.24) | C / Native | ~280 – 420 MB/s | 0.045 – 0.090 ms | ~45 – 80 MB | C Heap Allocator | Unsafe (C pointer ops) |
@@ -66,7 +66,7 @@ Comprehensive empirical comparison across primary PDF engines and language runti
 
 The following measurements reflect the complete 5,820-file reference corpus (319.75 MB total data) evaluated against `lopdf v0.36.0`:
 
-| Metric | `oxpdf v1.0.2` | `lopdf v0.36.0` | Relative Difference |
+| Metric | `oxpdf v1.0.3` | `lopdf v0.36.0` | Relative Difference |
 |---|---|---|---|
 | **Throughput** | **1,532.85 – 2,348.62 MB/s** | 22.93 – 23.71 MB/s | **66.8x – 99.04x faster** |
 | **File processing rate** | **27,900 – 42,748 files/s** | 417 – 431 files/s | **66.8x – 99.04x faster** |
@@ -87,14 +87,14 @@ Add `oxpdf` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-oxpdf = "1.0.2"
+oxpdf = "1.0.3"
 ```
 
 To use `oxpdf` in `no_std` environments (without memory-mapped file support):
 
 ```toml
 [dependencies]
-oxpdf = { version = "1.0.2", default-features = false }
+oxpdf = { version = "1.0.3", default-features = false }
 ```
 
 ---

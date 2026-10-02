@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-10-02
+
+### Fixed
+- **XRef Stream `/DecodeParms` Predictor Unfiltering** (`src/xref.rs`):
+  - Added pure-Rust implementation of PNG (Sub, Up, Average, Paeth) and TIFF Horizontal Differencing predictors for binary cross-reference streams.
+  - Correctly unfilters object byte offsets stored in compressed XRef streams, enabling retrieval of indirect `/Encrypt` dictionaries.
+  - Cleared all 4 remaining non-passing files in the 5,820-file reference corpus, achieving a **flawless 100.00% (5,820 / 5,820) pass rate**.
+
+### Changed
+- Updated all benchmark numbers, distributions, and matrices across `README.md` and `BENCHMARKS.md` to reflect 100.00% corpus pass rate.
+- Bumped `oxpdf`, `oxpdf-cli`, and `oxpdf-wasm` to `1.0.3`.
+
 ## [1.0.2] - 2026-10-02
 
 ### Added
@@ -35,11 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Global Cross-Stack Benchmark Suite**:
   - Comprehensive empirical comparison in `BENCHMARKS.md` evaluating `oxpdf` against Rust (`lopdf`, `pdf`), C/C++ (`MuPDF`, `Poppler`, `PDFium`, `QPDF`), Java (`PDFBox`, `Tika`), Python (`pypdf`, `pdfplumber`), Node (`pdfjs-dist`), and Go (`pdfcpu`).
   - 1.024 GB multi-gigabyte streaming document stress test demonstrating sub-millisecond load time (201 µs) and strictly bounded physical RAM (<3.1 MB RSS).
-
-### Fixed
-- **XRef Stream `/DecodeParms` Predictor Unfiltering** (`src/xref.rs`):
-  - Added pure-Rust implementation of PNG (Sub, Up, Average, Paeth) and TIFF Horizontal Differencing predictors for binary cross-reference streams.
-  - Cleared all 4 remaining failing files in the 5,820-file reference corpus, achieving a **100.00% (5,820 / 5,820) flawless pass rate**.
 
 ### Changed
 - Removed decryption from Scope Exclusions in `README.md` and promoted encrypted file handling to fully supported.

@@ -1,6 +1,6 @@
 [package]
 name = "oxpdf-cli"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 authors = ["isaim0011 <https://github.com/isaim0011>"]
 description = "High-performance command-line interface for the oxpdf PDF engine"
@@ -17,4 +17,4 @@ name = "oxpdf"
 path = "src/main.rs"
 
 [dependencies]
-oxpdf = { path = "..", version = "1.0.2" }
+oxpdf = { path = "..", version = "1.0.3" }
