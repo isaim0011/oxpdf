@@ -212,9 +212,9 @@ impl XRefTable {
                             let up_left = if i >= bpp { prev_row[i - bpp] } else { 0 };
 
                             let val = match filter_byte {
-                                0 => raw[i], // None
+                                0 => raw[i],                    // None
                                 1 => raw[i].wrapping_add(left), // Sub
-                                2 => raw[i].wrapping_add(up), // Up
+                                2 => raw[i].wrapping_add(up),   // Up
                                 3 => {
                                     // Average
                                     let avg = ((left as u16 + up as u16) / 2) as u8;
