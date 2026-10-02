@@ -890,8 +890,7 @@ mod tests {
             real_dict.push(22);
         }
 
-        out[top_dict_data_start..top_dict_data_start + dummy_dict_len]
-            .copy_from_slice(&real_dict);
+        out[top_dict_data_start..top_dict_data_start + dummy_dict_len].copy_from_slice(&real_dict);
 
         out
     }

@@ -3,11 +3,11 @@
 //! Supports password validation, Document Encryption Key (DEK) derivation,
 //! per-object key computation, and stream/string decryption for revisions R2 through R6.
 
-use std::borrow::Cow;
-use std::collections::BTreeMap;
 use aes::cipher::{BlockEncryptMut, KeyIvInit};
 use md5::{Digest as _, Md5};
 use sha2::{Sha256, Sha384, Sha512};
+use std::borrow::Cow;
+use std::collections::BTreeMap;
 
 use crate::crypto::aes::{aes_128_cbc_decrypt, aes_256_cbc_decrypt, aes_256_cbc_decrypt_raw};
 use crate::crypto::rc4::Rc4;
@@ -155,7 +155,8 @@ impl StandardSecurityHandler {
             _ => true,
         };
 
-        let (stream_cipher, string_cipher) = Self::resolve_ciphers(version, key_length_bytes, dict)?;
+        let (stream_cipher, string_cipher) =
+            Self::resolve_ciphers(version, key_length_bytes, dict)?;
 
         let id_0 = trailer_id_0.unwrap_or(b"");
 
@@ -263,7 +264,9 @@ impl StandardSecurityHandler {
                 Ok((stm, str_))
             }
             5 => Ok((CipherAlgorithm::Aes256, CipherAlgorithm::Aes256)),
-            _ => Err(Error::Decryption(format!("Unsupported V={version} in /Encrypt"))),
+            _ => Err(Error::Decryption(format!(
+                "Unsupported V={version} in /Encrypt"
+            ))),
         }
     }
 
@@ -387,7 +390,8 @@ impl StandardSecurityHandler {
         }
 
         // Try user password
-        let user_dek = Self::derive_key_r2_r4(password, o_entry, permissions, file_id_0, 2, 5, true);
+        let user_dek =
+            Self::derive_key_r2_r4(password, o_entry, permissions, file_id_0, 2, 5, true);
         let test_u = Rc4::new(&user_dek).encrypt(&PAD_BYTES);
         if test_u == u_entry[..32] {
             return Ok(user_dek);
@@ -419,7 +423,9 @@ impl StandardSecurityHandler {
         encrypt_metadata: bool,
     ) -> Result<Vec<u8>> {
         if o_entry.len() < 32 || u_entry.len() < 16 {
-            return Err(Error::Decryption("Invalid /O or /U length for R=3/4".into()));
+            return Err(Error::Decryption(
+                "Invalid /O or /U length for R=3/4".into(),
+            ));
         }
 
         // Helper to test if a derived DEK satisfies Algorithm 3.5 against /U
@@ -659,7 +665,10 @@ mod tests {
             encrypt_metadata: true,
             permissions: -4,
         };
-        let dek = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10];
+        let dek = vec![
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x10,
+        ];
         let handler = StandardSecurityHandler::new(params, dek.clone());
 
         // Test RC4 per-object key (obj 1, gen 0)
@@ -691,11 +700,20 @@ mod tests {
         let u_val = Rc4::new(&dek).encrypt(&PAD_BYTES);
 
         let mut dict = BTreeMap::new();
-        dict.insert(Cow::Borrowed("Filter"), Object::Name(Cow::Borrowed("Standard")));
+        dict.insert(
+            Cow::Borrowed("Filter"),
+            Object::Name(Cow::Borrowed("Standard")),
+        );
         dict.insert(Cow::Borrowed("V"), Object::Integer(1));
         dict.insert(Cow::Borrowed("R"), Object::Integer(2));
-        dict.insert(Cow::Borrowed("O"), Object::String(SmallVec::from_slice(&[0u8; 32])));
-        dict.insert(Cow::Borrowed("U"), Object::String(SmallVec::from_slice(&u_val)));
+        dict.insert(
+            Cow::Borrowed("O"),
+            Object::String(SmallVec::from_slice(&[0u8; 32])),
+        );
+        dict.insert(
+            Cow::Borrowed("U"),
+            Object::String(SmallVec::from_slice(&u_val)),
+        );
         dict.insert(Cow::Borrowed("P"), Object::Integer(permissions as i64));
 
         let handler = StandardSecurityHandler::from_encrypt_dict(&dict, Some(file_id_0), password)
@@ -709,7 +727,9 @@ mod tests {
         let plaintext = b"Stream decrypted successfully under V1/R2";
         let ciphertext = Rc4::new(&obj_key).encrypt(plaintext);
 
-        let decrypted = handler.decrypt_stream(obj_id, gen, &ciphertext).expect("decrypt stream failed");
+        let decrypted = handler
+            .decrypt_stream(obj_id, gen, &ciphertext)
+            .expect("decrypt stream failed");
         assert_eq!(decrypted, plaintext);
     }
 
@@ -748,12 +768,21 @@ mod tests {
         u_val.extend_from_slice(&[0u8; 16]); // total 32 bytes
 
         let mut dict = BTreeMap::new();
-        dict.insert(Cow::Borrowed("Filter"), Object::Name(Cow::Borrowed("Standard")));
+        dict.insert(
+            Cow::Borrowed("Filter"),
+            Object::Name(Cow::Borrowed("Standard")),
+        );
         dict.insert(Cow::Borrowed("V"), Object::Integer(4));
         dict.insert(Cow::Borrowed("R"), Object::Integer(4));
         dict.insert(Cow::Borrowed("Length"), Object::Integer(128));
-        dict.insert(Cow::Borrowed("O"), Object::String(SmallVec::from_slice(&dummy_o)));
-        dict.insert(Cow::Borrowed("U"), Object::String(SmallVec::from_slice(&u_val)));
+        dict.insert(
+            Cow::Borrowed("O"),
+            Object::String(SmallVec::from_slice(&dummy_o)),
+        );
+        dict.insert(
+            Cow::Borrowed("U"),
+            Object::String(SmallVec::from_slice(&u_val)),
+        );
         dict.insert(Cow::Borrowed("P"), Object::Integer(permissions as i64));
         dict.insert(Cow::Borrowed("StmF"), Object::Name(Cow::Borrowed("StdCF")));
         dict.insert(Cow::Borrowed("StrF"), Object::Name(Cow::Borrowed("StdCF")));
@@ -771,7 +800,9 @@ mod tests {
         let ciphertext = crate::crypto::aes::aes_128_cbc_encrypt(&obj_key, &iv, plaintext)
             .expect("encrypt failed");
 
-        let decrypted = handler.decrypt_stream(obj_id, gen, &ciphertext).expect("decrypt failed");
+        let decrypted = handler
+            .decrypt_stream(obj_id, gen, &ciphertext)
+            .expect("decrypt failed");
         assert_eq!(decrypted, plaintext);
     }
 
@@ -807,14 +838,29 @@ mod tests {
         }
 
         let mut dict = BTreeMap::new();
-        dict.insert(Cow::Borrowed("Filter"), Object::Name(Cow::Borrowed("Standard")));
+        dict.insert(
+            Cow::Borrowed("Filter"),
+            Object::Name(Cow::Borrowed("Standard")),
+        );
         dict.insert(Cow::Borrowed("V"), Object::Integer(5));
         dict.insert(Cow::Borrowed("R"), Object::Integer(5));
         dict.insert(Cow::Borrowed("Length"), Object::Integer(256));
-        dict.insert(Cow::Borrowed("O"), Object::String(SmallVec::from_slice(&[0u8; 48])));
-        dict.insert(Cow::Borrowed("U"), Object::String(SmallVec::from_slice(&u_bytes)));
-        dict.insert(Cow::Borrowed("OE"), Object::String(SmallVec::from_slice(&[0u8; 32])));
-        dict.insert(Cow::Borrowed("UE"), Object::String(SmallVec::from_slice(&ue)));
+        dict.insert(
+            Cow::Borrowed("O"),
+            Object::String(SmallVec::from_slice(&[0u8; 48])),
+        );
+        dict.insert(
+            Cow::Borrowed("U"),
+            Object::String(SmallVec::from_slice(&u_bytes)),
+        );
+        dict.insert(
+            Cow::Borrowed("OE"),
+            Object::String(SmallVec::from_slice(&[0u8; 32])),
+        );
+        dict.insert(
+            Cow::Borrowed("UE"),
+            Object::String(SmallVec::from_slice(&ue)),
+        );
         dict.insert(Cow::Borrowed("P"), Object::Integer(-4));
 
         let handler = StandardSecurityHandler::from_encrypt_dict(&dict, None, password)
@@ -824,10 +870,12 @@ mod tests {
         // AES-256 stream decryption uses DEK directly
         let iv = [0x88u8; 16];
         let plaintext = b"High-security AES-256 encrypted payload";
-        let ciphertext = crate::crypto::aes::aes_256_cbc_encrypt(&dek, &iv, plaintext)
-            .expect("encrypt failed");
+        let ciphertext =
+            crate::crypto::aes::aes_256_cbc_encrypt(&dek, &iv, plaintext).expect("encrypt failed");
 
-        let decrypted = handler.decrypt_stream(100, 0, &ciphertext).expect("decrypt failed");
+        let decrypted = handler
+            .decrypt_stream(100, 0, &ciphertext)
+            .expect("decrypt failed");
         assert_eq!(decrypted, plaintext);
     }
 
@@ -840,7 +888,8 @@ mod tests {
         let user_val_salt = [0x33u8; 8];
         let user_key_salt = [0x44u8; 8];
 
-        let user_val_hash = StandardSecurityHandler::compute_hash_r6(password, &user_val_salt, None);
+        let user_val_hash =
+            StandardSecurityHandler::compute_hash_r6(password, &user_val_salt, None);
 
         let mut u_bytes = Vec::new();
         u_bytes.extend_from_slice(&user_val_hash);
@@ -857,14 +906,29 @@ mod tests {
         }
 
         let mut dict = BTreeMap::new();
-        dict.insert(Cow::Borrowed("Filter"), Object::Name(Cow::Borrowed("Standard")));
+        dict.insert(
+            Cow::Borrowed("Filter"),
+            Object::Name(Cow::Borrowed("Standard")),
+        );
         dict.insert(Cow::Borrowed("V"), Object::Integer(5));
         dict.insert(Cow::Borrowed("R"), Object::Integer(6));
         dict.insert(Cow::Borrowed("Length"), Object::Integer(256));
-        dict.insert(Cow::Borrowed("O"), Object::String(SmallVec::from_slice(&[0u8; 48])));
-        dict.insert(Cow::Borrowed("U"), Object::String(SmallVec::from_slice(&u_bytes)));
-        dict.insert(Cow::Borrowed("OE"), Object::String(SmallVec::from_slice(&[0u8; 32])));
-        dict.insert(Cow::Borrowed("UE"), Object::String(SmallVec::from_slice(&ue)));
+        dict.insert(
+            Cow::Borrowed("O"),
+            Object::String(SmallVec::from_slice(&[0u8; 48])),
+        );
+        dict.insert(
+            Cow::Borrowed("U"),
+            Object::String(SmallVec::from_slice(&u_bytes)),
+        );
+        dict.insert(
+            Cow::Borrowed("OE"),
+            Object::String(SmallVec::from_slice(&[0u8; 32])),
+        );
+        dict.insert(
+            Cow::Borrowed("UE"),
+            Object::String(SmallVec::from_slice(&ue)),
+        );
         dict.insert(Cow::Borrowed("P"), Object::Integer(-4));
 
         let handler = StandardSecurityHandler::from_encrypt_dict(&dict, None, password)
@@ -874,10 +938,12 @@ mod tests {
         // AES-256 stream decryption
         let iv = [0x12u8; 16];
         let plaintext = b"PDF 2.0 ISO 32000-2 AES-256 decrypted successfully";
-        let ciphertext = crate::crypto::aes::aes_256_cbc_encrypt(&dek, &iv, plaintext)
-            .expect("encrypt failed");
+        let ciphertext =
+            crate::crypto::aes::aes_256_cbc_encrypt(&dek, &iv, plaintext).expect("encrypt failed");
 
-        let decrypted = handler.decrypt_stream(200, 0, &ciphertext).expect("decrypt failed");
+        let decrypted = handler
+            .decrypt_stream(200, 0, &ciphertext)
+            .expect("decrypt failed");
         assert_eq!(decrypted, plaintext);
     }
 }

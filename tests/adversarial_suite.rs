@@ -54,7 +54,7 @@ fn test_jbig2_decompression_bomb_cap() {
     jbig2_data.push(48); // Type 48: Page Information
     jbig2_data.push(0x01); // Page assoc 1
     jbig2_data.extend_from_slice(&(19u32.to_be_bytes())); // Length = 19
-    // Segment 1: Data (Page info)
+                                                          // Segment 1: Data (Page info)
     jbig2_data.extend_from_slice(&(100_000u32.to_be_bytes())); // Width
     jbig2_data.extend_from_slice(&(50_000u32.to_be_bytes())); // Height
     jbig2_data.extend_from_slice(&[0x00, 0x00, 0x01, 0x2C]); // Res X
@@ -127,7 +127,10 @@ fn test_matrix_nan_inf_immunity() {
 fn test_encryption_dict_cyclic_and_invalid_keys() {
     // 3.1 Invalid /R revision (< 2 or missing)
     let mut dict_invalid_r = BTreeMap::new();
-    dict_invalid_r.insert(Cow::Borrowed("Filter"), Object::Name(Cow::Borrowed("Standard")));
+    dict_invalid_r.insert(
+        Cow::Borrowed("Filter"),
+        Object::Name(Cow::Borrowed("Standard")),
+    );
     dict_invalid_r.insert(Cow::Borrowed("V"), Object::Integer(1));
     dict_invalid_r.insert(Cow::Borrowed("R"), Object::Integer(1)); // Invalid: R must be >= 2
     let res_r = StandardSecurityHandler::from_encrypt_dict(&dict_invalid_r, None, b"");
@@ -139,7 +142,10 @@ fn test_encryption_dict_cyclic_and_invalid_keys() {
 
     // 3.2 Invalid /Length (> 256 or non-multiple of 8)
     let mut dict_invalid_len = BTreeMap::new();
-    dict_invalid_len.insert(Cow::Borrowed("Filter"), Object::Name(Cow::Borrowed("Standard")));
+    dict_invalid_len.insert(
+        Cow::Borrowed("Filter"),
+        Object::Name(Cow::Borrowed("Standard")),
+    );
     dict_invalid_len.insert(Cow::Borrowed("V"), Object::Integer(2));
     dict_invalid_len.insert(Cow::Borrowed("R"), Object::Integer(3));
     dict_invalid_len.insert(Cow::Borrowed("Length"), Object::Integer(500)); // 500 bits > 256
@@ -219,7 +225,7 @@ fn test_malformed_font_headers_oob() {
     tt_data[4] = 0;
     tt_data[5] = 1; // 1 table
     tt_data[12..16].copy_from_slice(b"cmap"); // tag
-    // offset = 1000, length = 500 (beyond 28 bytes)
+                                              // offset = 1000, length = 500 (beyond 28 bytes)
     tt_data[20..24].copy_from_slice(&1000u32.to_be_bytes());
     tt_data[24..28].copy_from_slice(&500u32.to_be_bytes());
 

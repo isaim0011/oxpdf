@@ -142,217 +142,997 @@ struct HuffmanCode {
 
 // Terminating codes for White runs (0..63)
 static WHITE_TERMINATING: [HuffmanCode; 64] = [
-    HuffmanCode { code: 0b00110101, len: 8, run: 0 },
-    HuffmanCode { code: 0b000111, len: 6, run: 1 },
-    HuffmanCode { code: 0b0111, len: 4, run: 2 },
-    HuffmanCode { code: 0b1000, len: 4, run: 3 },
-    HuffmanCode { code: 0b1011, len: 4, run: 4 },
-    HuffmanCode { code: 0b1100, len: 4, run: 5 },
-    HuffmanCode { code: 0b1110, len: 4, run: 6 },
-    HuffmanCode { code: 0b1111, len: 4, run: 7 },
-    HuffmanCode { code: 0b10011, len: 5, run: 8 },
-    HuffmanCode { code: 0b10100, len: 5, run: 9 },
-    HuffmanCode { code: 0b00111, len: 5, run: 10 },
-    HuffmanCode { code: 0b01000, len: 5, run: 11 },
-    HuffmanCode { code: 0b001000, len: 6, run: 12 },
-    HuffmanCode { code: 0b000011, len: 6, run: 13 },
-    HuffmanCode { code: 0b110100, len: 6, run: 14 },
-    HuffmanCode { code: 0b110101, len: 6, run: 15 },
-    HuffmanCode { code: 0b101010, len: 6, run: 16 },
-    HuffmanCode { code: 0b101011, len: 6, run: 17 },
-    HuffmanCode { code: 0b0100111, len: 7, run: 18 },
-    HuffmanCode { code: 0b0001100, len: 7, run: 19 },
-    HuffmanCode { code: 0b0001000, len: 7, run: 20 },
-    HuffmanCode { code: 0b0010111, len: 7, run: 21 },
-    HuffmanCode { code: 0b0000011, len: 7, run: 22 },
-    HuffmanCode { code: 0b0000100, len: 7, run: 23 },
-    HuffmanCode { code: 0b0101000, len: 7, run: 24 },
-    HuffmanCode { code: 0b0101011, len: 7, run: 25 },
-    HuffmanCode { code: 0b0010011, len: 7, run: 26 },
-    HuffmanCode { code: 0b0100100, len: 7, run: 27 },
-    HuffmanCode { code: 0b0011000, len: 7, run: 28 },
-    HuffmanCode { code: 0b00000010, len: 8, run: 29 },
-    HuffmanCode { code: 0b00000011, len: 8, run: 30 },
-    HuffmanCode { code: 0b00011010, len: 8, run: 31 },
-    HuffmanCode { code: 0b00011011, len: 8, run: 32 },
-    HuffmanCode { code: 0b00010010, len: 8, run: 33 },
-    HuffmanCode { code: 0b00010011, len: 8, run: 34 },
-    HuffmanCode { code: 0b00010100, len: 8, run: 35 },
-    HuffmanCode { code: 0b00010101, len: 8, run: 36 },
-    HuffmanCode { code: 0b00010110, len: 8, run: 37 },
-    HuffmanCode { code: 0b00010111, len: 8, run: 38 },
-    HuffmanCode { code: 0b00101000, len: 8, run: 39 },
-    HuffmanCode { code: 0b00101001, len: 8, run: 40 },
-    HuffmanCode { code: 0b00101010, len: 8, run: 41 },
-    HuffmanCode { code: 0b00101011, len: 8, run: 42 },
-    HuffmanCode { code: 0b01010100, len: 8, run: 43 },
-    HuffmanCode { code: 0b01010101, len: 8, run: 44 },
-    HuffmanCode { code: 0b01010110, len: 8, run: 45 },
-    HuffmanCode { code: 0b01010111, len: 8, run: 46 },
-    HuffmanCode { code: 0b01101000, len: 8, run: 47 },
-    HuffmanCode { code: 0b01101001, len: 8, run: 48 },
-    HuffmanCode { code: 0b01001010, len: 8, run: 49 },
-    HuffmanCode { code: 0b01001011, len: 8, run: 50 },
-    HuffmanCode { code: 0b00110010, len: 8, run: 51 },
-    HuffmanCode { code: 0b00110011, len: 8, run: 52 },
-    HuffmanCode { code: 0b00110100, len: 8, run: 53 },
-    HuffmanCode { code: 0b00110110, len: 8, run: 54 },
-    HuffmanCode { code: 0b00110111, len: 8, run: 55 },
-    HuffmanCode { code: 0b01101010, len: 8, run: 56 },
-    HuffmanCode { code: 0b01101011, len: 8, run: 57 },
-    HuffmanCode { code: 0b01001100, len: 8, run: 58 },
-    HuffmanCode { code: 0b01001101, len: 8, run: 59 },
-    HuffmanCode { code: 0b001100010, len: 9, run: 60 },
-    HuffmanCode { code: 0b001100011, len: 9, run: 61 },
-    HuffmanCode { code: 0b001100100, len: 9, run: 62 },
-    HuffmanCode { code: 0b001100101, len: 9, run: 63 },
+    HuffmanCode {
+        code: 0b00110101,
+        len: 8,
+        run: 0,
+    },
+    HuffmanCode {
+        code: 0b000111,
+        len: 6,
+        run: 1,
+    },
+    HuffmanCode {
+        code: 0b0111,
+        len: 4,
+        run: 2,
+    },
+    HuffmanCode {
+        code: 0b1000,
+        len: 4,
+        run: 3,
+    },
+    HuffmanCode {
+        code: 0b1011,
+        len: 4,
+        run: 4,
+    },
+    HuffmanCode {
+        code: 0b1100,
+        len: 4,
+        run: 5,
+    },
+    HuffmanCode {
+        code: 0b1110,
+        len: 4,
+        run: 6,
+    },
+    HuffmanCode {
+        code: 0b1111,
+        len: 4,
+        run: 7,
+    },
+    HuffmanCode {
+        code: 0b10011,
+        len: 5,
+        run: 8,
+    },
+    HuffmanCode {
+        code: 0b10100,
+        len: 5,
+        run: 9,
+    },
+    HuffmanCode {
+        code: 0b00111,
+        len: 5,
+        run: 10,
+    },
+    HuffmanCode {
+        code: 0b01000,
+        len: 5,
+        run: 11,
+    },
+    HuffmanCode {
+        code: 0b001000,
+        len: 6,
+        run: 12,
+    },
+    HuffmanCode {
+        code: 0b000011,
+        len: 6,
+        run: 13,
+    },
+    HuffmanCode {
+        code: 0b110100,
+        len: 6,
+        run: 14,
+    },
+    HuffmanCode {
+        code: 0b110101,
+        len: 6,
+        run: 15,
+    },
+    HuffmanCode {
+        code: 0b101010,
+        len: 6,
+        run: 16,
+    },
+    HuffmanCode {
+        code: 0b101011,
+        len: 6,
+        run: 17,
+    },
+    HuffmanCode {
+        code: 0b0100111,
+        len: 7,
+        run: 18,
+    },
+    HuffmanCode {
+        code: 0b0001100,
+        len: 7,
+        run: 19,
+    },
+    HuffmanCode {
+        code: 0b0001000,
+        len: 7,
+        run: 20,
+    },
+    HuffmanCode {
+        code: 0b0010111,
+        len: 7,
+        run: 21,
+    },
+    HuffmanCode {
+        code: 0b0000011,
+        len: 7,
+        run: 22,
+    },
+    HuffmanCode {
+        code: 0b0000100,
+        len: 7,
+        run: 23,
+    },
+    HuffmanCode {
+        code: 0b0101000,
+        len: 7,
+        run: 24,
+    },
+    HuffmanCode {
+        code: 0b0101011,
+        len: 7,
+        run: 25,
+    },
+    HuffmanCode {
+        code: 0b0010011,
+        len: 7,
+        run: 26,
+    },
+    HuffmanCode {
+        code: 0b0100100,
+        len: 7,
+        run: 27,
+    },
+    HuffmanCode {
+        code: 0b0011000,
+        len: 7,
+        run: 28,
+    },
+    HuffmanCode {
+        code: 0b00000010,
+        len: 8,
+        run: 29,
+    },
+    HuffmanCode {
+        code: 0b00000011,
+        len: 8,
+        run: 30,
+    },
+    HuffmanCode {
+        code: 0b00011010,
+        len: 8,
+        run: 31,
+    },
+    HuffmanCode {
+        code: 0b00011011,
+        len: 8,
+        run: 32,
+    },
+    HuffmanCode {
+        code: 0b00010010,
+        len: 8,
+        run: 33,
+    },
+    HuffmanCode {
+        code: 0b00010011,
+        len: 8,
+        run: 34,
+    },
+    HuffmanCode {
+        code: 0b00010100,
+        len: 8,
+        run: 35,
+    },
+    HuffmanCode {
+        code: 0b00010101,
+        len: 8,
+        run: 36,
+    },
+    HuffmanCode {
+        code: 0b00010110,
+        len: 8,
+        run: 37,
+    },
+    HuffmanCode {
+        code: 0b00010111,
+        len: 8,
+        run: 38,
+    },
+    HuffmanCode {
+        code: 0b00101000,
+        len: 8,
+        run: 39,
+    },
+    HuffmanCode {
+        code: 0b00101001,
+        len: 8,
+        run: 40,
+    },
+    HuffmanCode {
+        code: 0b00101010,
+        len: 8,
+        run: 41,
+    },
+    HuffmanCode {
+        code: 0b00101011,
+        len: 8,
+        run: 42,
+    },
+    HuffmanCode {
+        code: 0b01010100,
+        len: 8,
+        run: 43,
+    },
+    HuffmanCode {
+        code: 0b01010101,
+        len: 8,
+        run: 44,
+    },
+    HuffmanCode {
+        code: 0b01010110,
+        len: 8,
+        run: 45,
+    },
+    HuffmanCode {
+        code: 0b01010111,
+        len: 8,
+        run: 46,
+    },
+    HuffmanCode {
+        code: 0b01101000,
+        len: 8,
+        run: 47,
+    },
+    HuffmanCode {
+        code: 0b01101001,
+        len: 8,
+        run: 48,
+    },
+    HuffmanCode {
+        code: 0b01001010,
+        len: 8,
+        run: 49,
+    },
+    HuffmanCode {
+        code: 0b01001011,
+        len: 8,
+        run: 50,
+    },
+    HuffmanCode {
+        code: 0b00110010,
+        len: 8,
+        run: 51,
+    },
+    HuffmanCode {
+        code: 0b00110011,
+        len: 8,
+        run: 52,
+    },
+    HuffmanCode {
+        code: 0b00110100,
+        len: 8,
+        run: 53,
+    },
+    HuffmanCode {
+        code: 0b00110110,
+        len: 8,
+        run: 54,
+    },
+    HuffmanCode {
+        code: 0b00110111,
+        len: 8,
+        run: 55,
+    },
+    HuffmanCode {
+        code: 0b01101010,
+        len: 8,
+        run: 56,
+    },
+    HuffmanCode {
+        code: 0b01101011,
+        len: 8,
+        run: 57,
+    },
+    HuffmanCode {
+        code: 0b01001100,
+        len: 8,
+        run: 58,
+    },
+    HuffmanCode {
+        code: 0b01001101,
+        len: 8,
+        run: 59,
+    },
+    HuffmanCode {
+        code: 0b001100010,
+        len: 9,
+        run: 60,
+    },
+    HuffmanCode {
+        code: 0b001100011,
+        len: 9,
+        run: 61,
+    },
+    HuffmanCode {
+        code: 0b001100100,
+        len: 9,
+        run: 62,
+    },
+    HuffmanCode {
+        code: 0b001100101,
+        len: 9,
+        run: 63,
+    },
 ];
 
 // Make-up codes for White runs (64..1728 in steps of 64)
 static WHITE_MAKEUP: [HuffmanCode; 27] = [
-    HuffmanCode { code: 0b11011, len: 5, run: 64 },
-    HuffmanCode { code: 0b10010, len: 5, run: 128 },
-    HuffmanCode { code: 0b010111, len: 6, run: 192 },
-    HuffmanCode { code: 0b0110111, len: 7, run: 256 },
-    HuffmanCode { code: 0b00110110, len: 8, run: 320 },
-    HuffmanCode { code: 0b00110111, len: 8, run: 384 },
-    HuffmanCode { code: 0b01100100, len: 8, run: 448 },
-    HuffmanCode { code: 0b01100101, len: 8, run: 512 },
-    HuffmanCode { code: 0b01101000, len: 8, run: 576 },
-    HuffmanCode { code: 0b01100111, len: 8, run: 640 },
-    HuffmanCode { code: 0b011001100, len: 9, run: 704 },
-    HuffmanCode { code: 0b011001101, len: 9, run: 768 },
-    HuffmanCode { code: 0b011010010, len: 9, run: 832 },
-    HuffmanCode { code: 0b011010011, len: 9, run: 896 },
-    HuffmanCode { code: 0b011010100, len: 9, run: 960 },
-    HuffmanCode { code: 0b011010101, len: 9, run: 1024 },
-    HuffmanCode { code: 0b011010110, len: 9, run: 1088 },
-    HuffmanCode { code: 0b011010111, len: 9, run: 1152 },
-    HuffmanCode { code: 0b011001000, len: 9, run: 1216 },
-    HuffmanCode { code: 0b011001001, len: 9, run: 1280 },
-    HuffmanCode { code: 0b011001010, len: 9, run: 1344 },
-    HuffmanCode { code: 0b011001011, len: 9, run: 1408 },
-    HuffmanCode { code: 0b010011000, len: 9, run: 1472 },
-    HuffmanCode { code: 0b010011001, len: 9, run: 1536 },
-    HuffmanCode { code: 0b010011010, len: 9, run: 1600 },
-    HuffmanCode { code: 0b011000, len: 6, run: 1664 },
-    HuffmanCode { code: 0b010011011, len: 9, run: 1728 },
+    HuffmanCode {
+        code: 0b11011,
+        len: 5,
+        run: 64,
+    },
+    HuffmanCode {
+        code: 0b10010,
+        len: 5,
+        run: 128,
+    },
+    HuffmanCode {
+        code: 0b010111,
+        len: 6,
+        run: 192,
+    },
+    HuffmanCode {
+        code: 0b0110111,
+        len: 7,
+        run: 256,
+    },
+    HuffmanCode {
+        code: 0b00110110,
+        len: 8,
+        run: 320,
+    },
+    HuffmanCode {
+        code: 0b00110111,
+        len: 8,
+        run: 384,
+    },
+    HuffmanCode {
+        code: 0b01100100,
+        len: 8,
+        run: 448,
+    },
+    HuffmanCode {
+        code: 0b01100101,
+        len: 8,
+        run: 512,
+    },
+    HuffmanCode {
+        code: 0b01101000,
+        len: 8,
+        run: 576,
+    },
+    HuffmanCode {
+        code: 0b01100111,
+        len: 8,
+        run: 640,
+    },
+    HuffmanCode {
+        code: 0b011001100,
+        len: 9,
+        run: 704,
+    },
+    HuffmanCode {
+        code: 0b011001101,
+        len: 9,
+        run: 768,
+    },
+    HuffmanCode {
+        code: 0b011010010,
+        len: 9,
+        run: 832,
+    },
+    HuffmanCode {
+        code: 0b011010011,
+        len: 9,
+        run: 896,
+    },
+    HuffmanCode {
+        code: 0b011010100,
+        len: 9,
+        run: 960,
+    },
+    HuffmanCode {
+        code: 0b011010101,
+        len: 9,
+        run: 1024,
+    },
+    HuffmanCode {
+        code: 0b011010110,
+        len: 9,
+        run: 1088,
+    },
+    HuffmanCode {
+        code: 0b011010111,
+        len: 9,
+        run: 1152,
+    },
+    HuffmanCode {
+        code: 0b011001000,
+        len: 9,
+        run: 1216,
+    },
+    HuffmanCode {
+        code: 0b011001001,
+        len: 9,
+        run: 1280,
+    },
+    HuffmanCode {
+        code: 0b011001010,
+        len: 9,
+        run: 1344,
+    },
+    HuffmanCode {
+        code: 0b011001011,
+        len: 9,
+        run: 1408,
+    },
+    HuffmanCode {
+        code: 0b010011000,
+        len: 9,
+        run: 1472,
+    },
+    HuffmanCode {
+        code: 0b010011001,
+        len: 9,
+        run: 1536,
+    },
+    HuffmanCode {
+        code: 0b010011010,
+        len: 9,
+        run: 1600,
+    },
+    HuffmanCode {
+        code: 0b011000,
+        len: 6,
+        run: 1664,
+    },
+    HuffmanCode {
+        code: 0b010011011,
+        len: 9,
+        run: 1728,
+    },
 ];
 
 // Terminating codes for Black runs (0..63)
 static BLACK_TERMINATING: [HuffmanCode; 64] = [
-    HuffmanCode { code: 0b0000110111, len: 10, run: 0 },
-    HuffmanCode { code: 0b010, len: 3, run: 1 },
-    HuffmanCode { code: 0b11, len: 2, run: 2 },
-    HuffmanCode { code: 0b10, len: 2, run: 3 },
-    HuffmanCode { code: 0b011, len: 3, run: 4 },
-    HuffmanCode { code: 0b0011, len: 4, run: 5 },
-    HuffmanCode { code: 0b0010, len: 4, run: 6 },
-    HuffmanCode { code: 0b00011, len: 5, run: 7 },
-    HuffmanCode { code: 0b000101, len: 6, run: 8 },
-    HuffmanCode { code: 0b000100, len: 6, run: 9 },
-    HuffmanCode { code: 0b0000100, len: 7, run: 10 },
-    HuffmanCode { code: 0b0000101, len: 7, run: 11 },
-    HuffmanCode { code: 0b0000111, len: 7, run: 12 },
-    HuffmanCode { code: 0b00000100, len: 8, run: 13 },
-    HuffmanCode { code: 0b00000111, len: 8, run: 14 },
-    HuffmanCode { code: 0b000011000, len: 9, run: 15 },
-    HuffmanCode { code: 0b0000010111, len: 10, run: 16 },
-    HuffmanCode { code: 0b0000011000, len: 10, run: 17 },
-    HuffmanCode { code: 0b0000001000, len: 10, run: 18 },
-    HuffmanCode { code: 0b00001100111, len: 11, run: 19 },
-    HuffmanCode { code: 0b00001101000, len: 11, run: 20 },
-    HuffmanCode { code: 0b00001101100, len: 11, run: 21 },
-    HuffmanCode { code: 0b00000110111, len: 11, run: 22 },
-    HuffmanCode { code: 0b00000101000, len: 11, run: 23 },
-    HuffmanCode { code: 0b00000010111, len: 11, run: 24 },
-    HuffmanCode { code: 0b00000011000, len: 11, run: 25 },
-    HuffmanCode { code: 0b000011001010, len: 12, run: 26 },
-    HuffmanCode { code: 0b000011001011, len: 12, run: 27 },
-    HuffmanCode { code: 0b000011001100, len: 12, run: 28 },
-    HuffmanCode { code: 0b000011001101, len: 12, run: 29 },
-    HuffmanCode { code: 0b000001101000, len: 12, run: 30 },
-    HuffmanCode { code: 0b000001101001, len: 12, run: 31 },
-    HuffmanCode { code: 0b000001101010, len: 12, run: 32 },
-    HuffmanCode { code: 0b000001101011, len: 12, run: 33 },
-    HuffmanCode { code: 0b000011010010, len: 12, run: 34 },
-    HuffmanCode { code: 0b000011010011, len: 12, run: 35 },
-    HuffmanCode { code: 0b000011010100, len: 12, run: 36 },
-    HuffmanCode { code: 0b000011010101, len: 12, run: 37 },
-    HuffmanCode { code: 0b000011010110, len: 12, run: 38 },
-    HuffmanCode { code: 0b000011010111, len: 12, run: 39 },
-    HuffmanCode { code: 0b000001101100, len: 12, run: 40 },
-    HuffmanCode { code: 0b000001101101, len: 12, run: 41 },
-    HuffmanCode { code: 0b000011011010, len: 12, run: 42 },
-    HuffmanCode { code: 0b000011011011, len: 12, run: 43 },
-    HuffmanCode { code: 0b000001010100, len: 12, run: 44 },
-    HuffmanCode { code: 0b000001010101, len: 12, run: 45 },
-    HuffmanCode { code: 0b000001010110, len: 12, run: 46 },
-    HuffmanCode { code: 0b000001010111, len: 12, run: 47 },
-    HuffmanCode { code: 0b000001100100, len: 12, run: 48 },
-    HuffmanCode { code: 0b000001100101, len: 12, run: 49 },
-    HuffmanCode { code: 0b000001010010, len: 12, run: 50 },
-    HuffmanCode { code: 0b000001010011, len: 12, run: 51 },
-    HuffmanCode { code: 0b000000100100, len: 12, run: 52 },
-    HuffmanCode { code: 0b000000110111, len: 12, run: 53 },
-    HuffmanCode { code: 0b000000111000, len: 12, run: 54 },
-    HuffmanCode { code: 0b000000100111, len: 12, run: 55 },
-    HuffmanCode { code: 0b000000101000, len: 12, run: 56 },
-    HuffmanCode { code: 0b000001011000, len: 12, run: 57 },
-    HuffmanCode { code: 0b000001011001, len: 12, run: 58 },
-    HuffmanCode { code: 0b000000101011, len: 12, run: 59 },
-    HuffmanCode { code: 0b000000101100, len: 12, run: 60 },
-    HuffmanCode { code: 0b000001011010, len: 12, run: 61 },
-    HuffmanCode { code: 0b000001100110, len: 12, run: 62 },
-    HuffmanCode { code: 0b000001100111, len: 12, run: 63 },
+    HuffmanCode {
+        code: 0b0000110111,
+        len: 10,
+        run: 0,
+    },
+    HuffmanCode {
+        code: 0b010,
+        len: 3,
+        run: 1,
+    },
+    HuffmanCode {
+        code: 0b11,
+        len: 2,
+        run: 2,
+    },
+    HuffmanCode {
+        code: 0b10,
+        len: 2,
+        run: 3,
+    },
+    HuffmanCode {
+        code: 0b011,
+        len: 3,
+        run: 4,
+    },
+    HuffmanCode {
+        code: 0b0011,
+        len: 4,
+        run: 5,
+    },
+    HuffmanCode {
+        code: 0b0010,
+        len: 4,
+        run: 6,
+    },
+    HuffmanCode {
+        code: 0b00011,
+        len: 5,
+        run: 7,
+    },
+    HuffmanCode {
+        code: 0b000101,
+        len: 6,
+        run: 8,
+    },
+    HuffmanCode {
+        code: 0b000100,
+        len: 6,
+        run: 9,
+    },
+    HuffmanCode {
+        code: 0b0000100,
+        len: 7,
+        run: 10,
+    },
+    HuffmanCode {
+        code: 0b0000101,
+        len: 7,
+        run: 11,
+    },
+    HuffmanCode {
+        code: 0b0000111,
+        len: 7,
+        run: 12,
+    },
+    HuffmanCode {
+        code: 0b00000100,
+        len: 8,
+        run: 13,
+    },
+    HuffmanCode {
+        code: 0b00000111,
+        len: 8,
+        run: 14,
+    },
+    HuffmanCode {
+        code: 0b000011000,
+        len: 9,
+        run: 15,
+    },
+    HuffmanCode {
+        code: 0b0000010111,
+        len: 10,
+        run: 16,
+    },
+    HuffmanCode {
+        code: 0b0000011000,
+        len: 10,
+        run: 17,
+    },
+    HuffmanCode {
+        code: 0b0000001000,
+        len: 10,
+        run: 18,
+    },
+    HuffmanCode {
+        code: 0b00001100111,
+        len: 11,
+        run: 19,
+    },
+    HuffmanCode {
+        code: 0b00001101000,
+        len: 11,
+        run: 20,
+    },
+    HuffmanCode {
+        code: 0b00001101100,
+        len: 11,
+        run: 21,
+    },
+    HuffmanCode {
+        code: 0b00000110111,
+        len: 11,
+        run: 22,
+    },
+    HuffmanCode {
+        code: 0b00000101000,
+        len: 11,
+        run: 23,
+    },
+    HuffmanCode {
+        code: 0b00000010111,
+        len: 11,
+        run: 24,
+    },
+    HuffmanCode {
+        code: 0b00000011000,
+        len: 11,
+        run: 25,
+    },
+    HuffmanCode {
+        code: 0b000011001010,
+        len: 12,
+        run: 26,
+    },
+    HuffmanCode {
+        code: 0b000011001011,
+        len: 12,
+        run: 27,
+    },
+    HuffmanCode {
+        code: 0b000011001100,
+        len: 12,
+        run: 28,
+    },
+    HuffmanCode {
+        code: 0b000011001101,
+        len: 12,
+        run: 29,
+    },
+    HuffmanCode {
+        code: 0b000001101000,
+        len: 12,
+        run: 30,
+    },
+    HuffmanCode {
+        code: 0b000001101001,
+        len: 12,
+        run: 31,
+    },
+    HuffmanCode {
+        code: 0b000001101010,
+        len: 12,
+        run: 32,
+    },
+    HuffmanCode {
+        code: 0b000001101011,
+        len: 12,
+        run: 33,
+    },
+    HuffmanCode {
+        code: 0b000011010010,
+        len: 12,
+        run: 34,
+    },
+    HuffmanCode {
+        code: 0b000011010011,
+        len: 12,
+        run: 35,
+    },
+    HuffmanCode {
+        code: 0b000011010100,
+        len: 12,
+        run: 36,
+    },
+    HuffmanCode {
+        code: 0b000011010101,
+        len: 12,
+        run: 37,
+    },
+    HuffmanCode {
+        code: 0b000011010110,
+        len: 12,
+        run: 38,
+    },
+    HuffmanCode {
+        code: 0b000011010111,
+        len: 12,
+        run: 39,
+    },
+    HuffmanCode {
+        code: 0b000001101100,
+        len: 12,
+        run: 40,
+    },
+    HuffmanCode {
+        code: 0b000001101101,
+        len: 12,
+        run: 41,
+    },
+    HuffmanCode {
+        code: 0b000011011010,
+        len: 12,
+        run: 42,
+    },
+    HuffmanCode {
+        code: 0b000011011011,
+        len: 12,
+        run: 43,
+    },
+    HuffmanCode {
+        code: 0b000001010100,
+        len: 12,
+        run: 44,
+    },
+    HuffmanCode {
+        code: 0b000001010101,
+        len: 12,
+        run: 45,
+    },
+    HuffmanCode {
+        code: 0b000001010110,
+        len: 12,
+        run: 46,
+    },
+    HuffmanCode {
+        code: 0b000001010111,
+        len: 12,
+        run: 47,
+    },
+    HuffmanCode {
+        code: 0b000001100100,
+        len: 12,
+        run: 48,
+    },
+    HuffmanCode {
+        code: 0b000001100101,
+        len: 12,
+        run: 49,
+    },
+    HuffmanCode {
+        code: 0b000001010010,
+        len: 12,
+        run: 50,
+    },
+    HuffmanCode {
+        code: 0b000001010011,
+        len: 12,
+        run: 51,
+    },
+    HuffmanCode {
+        code: 0b000000100100,
+        len: 12,
+        run: 52,
+    },
+    HuffmanCode {
+        code: 0b000000110111,
+        len: 12,
+        run: 53,
+    },
+    HuffmanCode {
+        code: 0b000000111000,
+        len: 12,
+        run: 54,
+    },
+    HuffmanCode {
+        code: 0b000000100111,
+        len: 12,
+        run: 55,
+    },
+    HuffmanCode {
+        code: 0b000000101000,
+        len: 12,
+        run: 56,
+    },
+    HuffmanCode {
+        code: 0b000001011000,
+        len: 12,
+        run: 57,
+    },
+    HuffmanCode {
+        code: 0b000001011001,
+        len: 12,
+        run: 58,
+    },
+    HuffmanCode {
+        code: 0b000000101011,
+        len: 12,
+        run: 59,
+    },
+    HuffmanCode {
+        code: 0b000000101100,
+        len: 12,
+        run: 60,
+    },
+    HuffmanCode {
+        code: 0b000001011010,
+        len: 12,
+        run: 61,
+    },
+    HuffmanCode {
+        code: 0b000001100110,
+        len: 12,
+        run: 62,
+    },
+    HuffmanCode {
+        code: 0b000001100111,
+        len: 12,
+        run: 63,
+    },
 ];
 
 // Make-up codes for Black runs (64..1728 in steps of 64)
 static BLACK_MAKEUP: [HuffmanCode; 27] = [
-    HuffmanCode { code: 0b0000001111, len: 10, run: 64 },
-    HuffmanCode { code: 0b000011001000, len: 12, run: 128 },
-    HuffmanCode { code: 0b000011001001, len: 12, run: 192 },
-    HuffmanCode { code: 0b000001011011, len: 12, run: 256 },
-    HuffmanCode { code: 0b000000110011, len: 12, run: 320 },
-    HuffmanCode { code: 0b000000110100, len: 12, run: 384 },
-    HuffmanCode { code: 0b000000110101, len: 12, run: 448 },
-    HuffmanCode { code: 0b0000001101100, len: 13, run: 512 },
-    HuffmanCode { code: 0b0000001101101, len: 13, run: 576 },
-    HuffmanCode { code: 0b0000001001010, len: 13, run: 640 },
-    HuffmanCode { code: 0b0000001001011, len: 13, run: 704 },
-    HuffmanCode { code: 0b0000001001100, len: 13, run: 768 },
-    HuffmanCode { code: 0b0000001001101, len: 13, run: 832 },
-    HuffmanCode { code: 0b0000001110010, len: 13, run: 896 },
-    HuffmanCode { code: 0b0000001110011, len: 13, run: 960 },
-    HuffmanCode { code: 0b0000001110100, len: 13, run: 1024 },
-    HuffmanCode { code: 0b0000001110101, len: 13, run: 1088 },
-    HuffmanCode { code: 0b0000001110110, len: 13, run: 1152 },
-    HuffmanCode { code: 0b0000001110111, len: 13, run: 1216 },
-    HuffmanCode { code: 0b0000001010010, len: 13, run: 1280 },
-    HuffmanCode { code: 0b0000001010011, len: 13, run: 1344 },
-    HuffmanCode { code: 0b0000001010100, len: 13, run: 1408 },
-    HuffmanCode { code: 0b0000001010101, len: 13, run: 1472 },
-    HuffmanCode { code: 0b0000001011010, len: 13, run: 1536 },
-    HuffmanCode { code: 0b0000001011011, len: 13, run: 1600 },
-    HuffmanCode { code: 0b0000011000, len: 10, run: 1664 },
-    HuffmanCode { code: 0b0000001100101, len: 13, run: 1728 },
+    HuffmanCode {
+        code: 0b0000001111,
+        len: 10,
+        run: 64,
+    },
+    HuffmanCode {
+        code: 0b000011001000,
+        len: 12,
+        run: 128,
+    },
+    HuffmanCode {
+        code: 0b000011001001,
+        len: 12,
+        run: 192,
+    },
+    HuffmanCode {
+        code: 0b000001011011,
+        len: 12,
+        run: 256,
+    },
+    HuffmanCode {
+        code: 0b000000110011,
+        len: 12,
+        run: 320,
+    },
+    HuffmanCode {
+        code: 0b000000110100,
+        len: 12,
+        run: 384,
+    },
+    HuffmanCode {
+        code: 0b000000110101,
+        len: 12,
+        run: 448,
+    },
+    HuffmanCode {
+        code: 0b0000001101100,
+        len: 13,
+        run: 512,
+    },
+    HuffmanCode {
+        code: 0b0000001101101,
+        len: 13,
+        run: 576,
+    },
+    HuffmanCode {
+        code: 0b0000001001010,
+        len: 13,
+        run: 640,
+    },
+    HuffmanCode {
+        code: 0b0000001001011,
+        len: 13,
+        run: 704,
+    },
+    HuffmanCode {
+        code: 0b0000001001100,
+        len: 13,
+        run: 768,
+    },
+    HuffmanCode {
+        code: 0b0000001001101,
+        len: 13,
+        run: 832,
+    },
+    HuffmanCode {
+        code: 0b0000001110010,
+        len: 13,
+        run: 896,
+    },
+    HuffmanCode {
+        code: 0b0000001110011,
+        len: 13,
+        run: 960,
+    },
+    HuffmanCode {
+        code: 0b0000001110100,
+        len: 13,
+        run: 1024,
+    },
+    HuffmanCode {
+        code: 0b0000001110101,
+        len: 13,
+        run: 1088,
+    },
+    HuffmanCode {
+        code: 0b0000001110110,
+        len: 13,
+        run: 1152,
+    },
+    HuffmanCode {
+        code: 0b0000001110111,
+        len: 13,
+        run: 1216,
+    },
+    HuffmanCode {
+        code: 0b0000001010010,
+        len: 13,
+        run: 1280,
+    },
+    HuffmanCode {
+        code: 0b0000001010011,
+        len: 13,
+        run: 1344,
+    },
+    HuffmanCode {
+        code: 0b0000001010100,
+        len: 13,
+        run: 1408,
+    },
+    HuffmanCode {
+        code: 0b0000001010101,
+        len: 13,
+        run: 1472,
+    },
+    HuffmanCode {
+        code: 0b0000001011010,
+        len: 13,
+        run: 1536,
+    },
+    HuffmanCode {
+        code: 0b0000001011011,
+        len: 13,
+        run: 1600,
+    },
+    HuffmanCode {
+        code: 0b0000011000,
+        len: 10,
+        run: 1664,
+    },
+    HuffmanCode {
+        code: 0b0000001100101,
+        len: 13,
+        run: 1728,
+    },
 ];
 
 // Additional shared make-up codes (1792..2560 in steps of 64)
 static SHARED_MAKEUP: [HuffmanCode; 13] = [
-    HuffmanCode { code: 0b00000001000, len: 11, run: 1792 },
-    HuffmanCode { code: 0b00000001100, len: 11, run: 1856 },
-    HuffmanCode { code: 0b00000001101, len: 11, run: 1920 },
-    HuffmanCode { code: 0b000000010010, len: 12, run: 1984 },
-    HuffmanCode { code: 0b000000010011, len: 12, run: 2048 },
-    HuffmanCode { code: 0b000000010100, len: 12, run: 2112 },
-    HuffmanCode { code: 0b000000010101, len: 12, run: 2176 },
-    HuffmanCode { code: 0b000000010110, len: 12, run: 2240 },
-    HuffmanCode { code: 0b000000010111, len: 12, run: 2304 },
-    HuffmanCode { code: 0b000000011100, len: 12, run: 2368 },
-    HuffmanCode { code: 0b000000011101, len: 12, run: 2432 },
-    HuffmanCode { code: 0b000000011110, len: 12, run: 2496 },
-    HuffmanCode { code: 0b000000011111, len: 12, run: 2560 },
+    HuffmanCode {
+        code: 0b00000001000,
+        len: 11,
+        run: 1792,
+    },
+    HuffmanCode {
+        code: 0b00000001100,
+        len: 11,
+        run: 1856,
+    },
+    HuffmanCode {
+        code: 0b00000001101,
+        len: 11,
+        run: 1920,
+    },
+    HuffmanCode {
+        code: 0b000000010010,
+        len: 12,
+        run: 1984,
+    },
+    HuffmanCode {
+        code: 0b000000010011,
+        len: 12,
+        run: 2048,
+    },
+    HuffmanCode {
+        code: 0b000000010100,
+        len: 12,
+        run: 2112,
+    },
+    HuffmanCode {
+        code: 0b000000010101,
+        len: 12,
+        run: 2176,
+    },
+    HuffmanCode {
+        code: 0b000000010110,
+        len: 12,
+        run: 2240,
+    },
+    HuffmanCode {
+        code: 0b000000010111,
+        len: 12,
+        run: 2304,
+    },
+    HuffmanCode {
+        code: 0b000000011100,
+        len: 12,
+        run: 2368,
+    },
+    HuffmanCode {
+        code: 0b000000011101,
+        len: 12,
+        run: 2432,
+    },
+    HuffmanCode {
+        code: 0b000000011110,
+        len: 12,
+        run: 2496,
+    },
+    HuffmanCode {
+        code: 0b000000011111,
+        len: 12,
+        run: 2560,
+    },
 ];
 
 /// Decodes one complete white run-length (including make-up codes if any).
@@ -578,7 +1358,12 @@ fn find_next_changing_element(line: &[u8], start_idx: usize, columns: usize) -> 
         return columns;
     }
     let current_val = line[start_idx];
-    for (i, &val) in line.iter().enumerate().skip(start_idx + 1).take(columns - (start_idx + 1)) {
+    for (i, &val) in line
+        .iter()
+        .enumerate()
+        .skip(start_idx + 1)
+        .take(columns - (start_idx + 1))
+    {
         if val != current_val {
             return i;
         }
@@ -587,8 +1372,18 @@ fn find_next_changing_element(line: &[u8], start_idx: usize, columns: usize) -> 
 }
 
 /// Finds the next changing element of a specific color after `start_idx`.
-fn find_next_changing_color(line: &[u8], start_idx: usize, columns: usize, target_color: u8) -> usize {
-    for (i, &val) in line.iter().enumerate().skip(start_idx).take(columns - start_idx) {
+fn find_next_changing_color(
+    line: &[u8],
+    start_idx: usize,
+    columns: usize,
+    target_color: u8,
+) -> usize {
+    for (i, &val) in line
+        .iter()
+        .enumerate()
+        .skip(start_idx)
+        .take(columns - start_idx)
+    {
         if val == target_color {
             return i;
         }
@@ -601,7 +1396,11 @@ fn find_next_changing_color(line: &[u8], start_idx: usize, columns: usize, targe
 // -----------------------------------------------------------------------------
 
 /// Decodes one 1D line (Modified Huffman).
-fn decode_line_1d(reader: &mut BitReader<'_>, current_line: &mut [u8], columns: usize) -> Result<()> {
+fn decode_line_1d(
+    reader: &mut BitReader<'_>,
+    current_line: &mut [u8],
+    columns: usize,
+) -> Result<()> {
     let mut a0 = 0usize;
     let mut is_white = true;
 
@@ -793,7 +1592,9 @@ pub fn decode_ccitt_fax(input: &[u8], params: &CcittParams) -> Result<Vec<u8>> {
     let max_allowed_rows = StreamView::MAX_DECOMPRESS_BYTES / bytes_per_row;
     let expected_rows = if params.rows > 0 {
         if (params.rows as usize) > max_allowed_rows {
-            return Err(Error::Unsupported("decompressed CCITT stream exceeds 256 MB safety limit"));
+            return Err(Error::Unsupported(
+                "decompressed CCITT stream exceeds 256 MB safety limit",
+            ));
         }
         params.rows as usize
     } else {
@@ -823,7 +1624,9 @@ pub fn decode_ccitt_fax(input: &[u8], params: &CcittParams) -> Result<Vec<u8>> {
 
         // Check 256MB safety limit
         if output.len() + bytes_per_row > StreamView::MAX_DECOMPRESS_BYTES {
-            return Err(Error::Unsupported("decompressed CCITT stream exceeds 256 MB safety limit"));
+            return Err(Error::Unsupported(
+                "decompressed CCITT stream exceeds 256 MB safety limit",
+            ));
         }
 
         if params.k < 0 {

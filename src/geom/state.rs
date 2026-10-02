@@ -176,9 +176,8 @@ impl GraphicsStateTracker {
             || lower.contains("black")
             || lower.contains("heavy")
             || lower.contains("demi");
-        let name_italic = lower.contains("italic")
-            || lower.contains("oblique")
-            || lower.contains("slanted");
+        let name_italic =
+            lower.contains("italic") || lower.contains("oblique") || lower.contains("slanted");
 
         let is_bold = meta.map(|m| m.is_bold).unwrap_or(false) || name_bold;
         let is_italic = meta.map(|m| m.is_italic).unwrap_or(false) || name_italic;
@@ -211,8 +210,8 @@ impl GraphicsStateTracker {
         // Standard PDF font fallback width heuristics
         match ch {
             ' ' => 278.0,
-            '.' | ',' | ':' | ';' | '!' | '\'' | '|' | 'i' | 'l' | 'j' | 't' | 'f' | 'r'
-            | 'I' | '1' => 278.0,
+            '.' | ',' | ':' | ';' | '!' | '\'' | '|' | 'i' | 'l' | 'j' | 't' | 'f' | 'r' | 'I'
+            | '1' => 278.0,
             'm' | 'w' | 'M' | 'W' | '@' | '%' | '—' => 750.0,
             _ => 500.0,
         }
@@ -229,11 +228,7 @@ impl GraphicsStateTracker {
     }
 
     /// Processes an individual content stream operation.
-    pub fn process_operation(
-        &mut self,
-        op: &Operation<'_>,
-        spans: &mut Vec<TextSpan<'static>>,
-    ) {
+    pub fn process_operation(&mut self, op: &Operation<'_>, spans: &mut Vec<TextSpan<'static>>) {
         match op.operator() {
             // Graphics state stack
             Operator::q => {

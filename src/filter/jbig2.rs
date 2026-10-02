@@ -36,13 +36,17 @@ pub fn decode_jbig2(input: &[u8], params: &Jbig2Params) -> Result<Vec<u8>> {
     }
 
     if input.len() > StreamView::MAX_DECOMPRESS_BYTES {
-        return Err(Error::Unsupported("JBIG2 input exceeds 256 MB safety limit"));
+        return Err(Error::Unsupported(
+            "JBIG2 input exceeds 256 MB safety limit",
+        ));
     }
 
     // Process globals if supplied
     if let Some(globals_data) = &params.globals {
         if globals_data.len() > StreamView::MAX_DECOMPRESS_BYTES {
-            return Err(Error::Unsupported("JBIG2Globals exceeds 256 MB safety limit"));
+            return Err(Error::Unsupported(
+                "JBIG2Globals exceeds 256 MB safety limit",
+            ));
         }
         let _ = parse_segments(globals_data)?;
     }

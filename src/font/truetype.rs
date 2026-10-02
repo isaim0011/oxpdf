@@ -130,12 +130,9 @@ impl TrueTypeFont {
             let rec = 4 + i * 8;
             let platform_id = u16::from_be_bytes([data[rec], data[rec + 1]]);
             let encoding_id = u16::from_be_bytes([data[rec + 2], data[rec + 3]]);
-            let sub_offset = u32::from_be_bytes([
-                data[rec + 4],
-                data[rec + 5],
-                data[rec + 6],
-                data[rec + 7],
-            ]) as usize;
+            let sub_offset =
+                u32::from_be_bytes([data[rec + 4], data[rec + 5], data[rec + 6], data[rec + 7]])
+                    as usize;
 
             if sub_offset + 2 > data.len() {
                 continue;
@@ -179,24 +176,12 @@ impl TrueTypeFont {
 
         for i in 0..num_groups {
             let grp = 16 + i * 12;
-            let start_char = u32::from_be_bytes([
-                data[grp],
-                data[grp + 1],
-                data[grp + 2],
-                data[grp + 3],
-            ]);
-            let end_char = u32::from_be_bytes([
-                data[grp + 4],
-                data[grp + 5],
-                data[grp + 6],
-                data[grp + 7],
-            ]);
-            let start_glyph = u32::from_be_bytes([
-                data[grp + 8],
-                data[grp + 9],
-                data[grp + 10],
-                data[grp + 11],
-            ]);
+            let start_char =
+                u32::from_be_bytes([data[grp], data[grp + 1], data[grp + 2], data[grp + 3]]);
+            let end_char =
+                u32::from_be_bytes([data[grp + 4], data[grp + 5], data[grp + 6], data[grp + 7]]);
+            let start_glyph =
+                u32::from_be_bytes([data[grp + 8], data[grp + 9], data[grp + 10], data[grp + 11]]);
 
             if end_char < start_char {
                 continue;
@@ -335,8 +320,7 @@ impl TrueTypeFont {
 
             for gid in 0..num_glyphs {
                 let idx_pos = 34 + gid * 2;
-                let name_idx =
-                    u16::from_be_bytes([data[idx_pos], data[idx_pos + 1]]) as usize;
+                let name_idx = u16::from_be_bytes([data[idx_pos], data[idx_pos + 1]]) as usize;
                 let name: Option<&str> = if name_idx < 258 {
                     MAC_POST_NAMES.get(name_idx).copied()
                 } else {

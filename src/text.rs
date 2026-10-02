@@ -667,9 +667,7 @@ fn extract_stream_filters(dict: &BTreeMap<Cow<'_, str>, Object<'_>>) -> Result<V
             };
             for (i, item) in arr.iter().enumerate() {
                 if let Object::Name(name) = item {
-                    let parms_dict = parms_arr
-                        .and_then(|pa| pa.get(i))
-                        .and_then(|o| o.as_dict());
+                    let parms_dict = parms_arr.and_then(|pa| pa.get(i)).and_then(|o| o.as_dict());
                     filters.push(parse_filter_with_parms(name, parms_dict)?);
                 }
             }
@@ -835,11 +833,22 @@ fn resolve_embedded_font(
     font_dict: &BTreeMap<Cow<'_, str>, Object<'_>>,
 ) -> Option<EmbeddedFont> {
     // 1. Resolve /FontDescriptor
-    let desc_dict: Option<BTreeMap<Cow<'static, str>, Object<'static>>> = if let Some(desc_obj) = font_dict.get("FontDescriptor") {
+    let desc_dict: Option<BTreeMap<Cow<'static, str>, Object<'static>>> = if let Some(desc_obj) =
+        font_dict.get("FontDescriptor")
+    {
         match desc_obj {
-            Object::Dictionary(d) => Some(d.clone().into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+            Object::Dictionary(d) => Some(
+                d.clone()
+                    .into_iter()
+                    .map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned()))
+                    .collect(),
+            ),
             Object::Reference { id, .. } => match doc.get_object(*id) {
-                Ok(Some(Object::Dictionary(d))) => Some(d.into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                Ok(Some(Object::Dictionary(d))) => Some(
+                    d.into_iter()
+                        .map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned()))
+                        .collect(),
+                ),
                 _ => None,
             },
             _ => None,
@@ -847,18 +856,36 @@ fn resolve_embedded_font(
     } else if let Some(Object::Array(descendants)) = font_dict.get("DescendantFonts") {
         match descendants.first() {
             Some(Object::Dictionary(d)) => match d.get("FontDescriptor") {
-                Some(Object::Dictionary(desc)) => Some(desc.clone().into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                Some(Object::Dictionary(desc)) => Some(
+                    desc.clone()
+                        .into_iter()
+                        .map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned()))
+                        .collect(),
+                ),
                 Some(Object::Reference { id, .. }) => match doc.get_object(*id) {
-                    Ok(Some(Object::Dictionary(desc))) => Some(desc.into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                    Ok(Some(Object::Dictionary(desc))) => Some(
+                        desc.into_iter()
+                            .map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned()))
+                            .collect(),
+                    ),
                     _ => None,
                 },
                 _ => None,
             },
             Some(Object::Reference { id, .. }) => match doc.get_object(*id) {
                 Ok(Some(Object::Dictionary(d))) => match d.get("FontDescriptor") {
-                    Some(Object::Dictionary(desc)) => Some(desc.clone().into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                    Some(Object::Dictionary(desc)) => Some(
+                        desc.clone()
+                            .into_iter()
+                            .map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned()))
+                            .collect(),
+                    ),
                     Some(Object::Reference { id: desc_id, .. }) => match doc.get_object(*desc_id) {
-                        Ok(Some(Object::Dictionary(desc))) => Some(desc.into_iter().map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned())).collect()),
+                        Ok(Some(Object::Dictionary(desc))) => Some(
+                            desc.into_iter()
+                                .map(|(k, v)| (Cow::Owned(k.into_owned()), v.into_owned()))
+                                .collect(),
+                        ),
                         _ => None,
                     },
                     _ => None,
@@ -1731,7 +1758,7 @@ mod tests {
         post.extend_from_slice(&0u16.to_be_bytes()); // GID 0: .notdef (idx 0)
         post.extend_from_slice(&258u16.to_be_bytes()); // GID 1: custom string 0 -> "fi"
         post.extend_from_slice(&259u16.to_be_bytes()); // GID 2: custom string 1 -> "ampersand"
-        // Pascal strings:
+                                                       // Pascal strings:
         post.push(2);
         post.extend_from_slice(b"fi");
         post.push(9);
@@ -1780,9 +1807,7 @@ mod tests {
             b"6 0 obj\n<< /Type /FontDescriptor /FontName /CustomTTF /FontFile2 7 0 R >>\nendobj\n",
         );
         // 7: FontFile2 stream
-        pdf.extend_from_slice(
-            format!("7 0 obj\n<< /Length {} >>\nstream\n", ttf.len()).as_bytes(),
-        );
+        pdf.extend_from_slice(format!("7 0 obj\n<< /Length {} >>\nstream\n", ttf.len()).as_bytes());
         pdf.extend_from_slice(&ttf);
         pdf.extend_from_slice(b"\nendstream\nendobj\n");
 
@@ -1875,9 +1900,7 @@ mod tests {
         pdf.extend_from_slice(
             b"6 0 obj\n<< /Type /FontDescriptor /FontName /CFFTest /FontFile3 7 0 R >>\nendobj\n",
         );
-        pdf.extend_from_slice(
-            format!("7 0 obj\n<< /Length {} >>\nstream\n", cff.len()).as_bytes(),
-        );
+        pdf.extend_from_slice(format!("7 0 obj\n<< /Length {} >>\nstream\n", cff.len()).as_bytes());
         pdf.extend_from_slice(&cff);
         pdf.extend_from_slice(b"\nendstream\nendobj\n");
 

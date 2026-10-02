@@ -2,10 +2,10 @@
 //!
 //! Handles 16-byte random IV prefix and PKCS#7 unpadding using the `aes` and `cbc` crates.
 
+use crate::error::{Error, Result};
 use aes::{Aes128, Aes256};
 use cbc::cipher::block_padding::Pkcs7;
 use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
-use crate::error::{Error, Result};
 
 type Aes128CbcDec = cbc::Decryptor<Aes128>;
 type Aes256CbcDec = cbc::Decryptor<Aes256>;
