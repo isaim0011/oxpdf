@@ -157,13 +157,105 @@ impl XRefTable {
             .map(|n| n == "FlateDecode")
             .unwrap_or(false);
 
-        let decoded: Vec<u8> = if is_flate {
+        let mut decoded: Vec<u8> = if is_flate {
             let view = crate::stream::StreamView::new(&raw_data)
                 .with_filter(crate::stream::FilterKind::FlateDecode);
             view.decode()?
         } else {
             raw_data.to_vec()
         };
+
+        // Handle /DecodeParms predictor if specified (e.g. Predictor 12 PNG Up)
+        if let Some(decode_parms) = dict.get("DecodeParms") {
+            let (predictor, columns, colors, bpc) = match decode_parms {
+                Object::Dictionary(dp) => {
+                    let pred = match dp.get("Predictor") {
+                        Some(Object::Integer(p)) => *p,
+                        _ => 1,
+                    };
+                    let cols = match dp.get("Columns") {
+                        Some(Object::Integer(c)) => *c,
+                        _ => 1,
+                    };
+                    let clrs = match dp.get("Colors") {
+                        Some(Object::Integer(c)) => *c,
+                        _ => 1,
+                    };
+                    let bits = match dp.get("BitsPerComponent") {
+                        Some(Object::Integer(b)) => *b,
+                        _ => 8,
+                    };
+                    (pred, cols as usize, clrs as usize, bits as usize)
+                }
+                _ => (1, 1, 1, 8),
+            };
+
+            if predictor >= 10 {
+                // PNG predictor (10..15): each row has 1 filter byte prefix
+                let bytes_per_pixel = (colors * bpc).div_ceil(8);
+                let bpp = bytes_per_pixel.max(1);
+                let row_bytes = (columns * colors * bpc).div_ceil(8);
+                let stride = row_bytes + 1;
+
+                if stride > 1 && decoded.len() >= stride {
+                    let mut unpredicted = Vec::with_capacity(decoded.len());
+                    let mut prev_row = vec![0u8; row_bytes];
+
+                    for chunk in decoded.chunks_exact(stride) {
+                        let filter_byte = chunk[0];
+                        let raw = &chunk[1..];
+                        let mut curr_row = vec![0u8; row_bytes];
+
+                        for i in 0..row_bytes {
+                            let left = if i >= bpp { curr_row[i - bpp] } else { 0 };
+                            let up = prev_row[i];
+                            let up_left = if i >= bpp { prev_row[i - bpp] } else { 0 };
+
+                            let val = match filter_byte {
+                                0 => raw[i], // None
+                                1 => raw[i].wrapping_add(left), // Sub
+                                2 => raw[i].wrapping_add(up), // Up
+                                3 => {
+                                    // Average
+                                    let avg = ((left as u16 + up as u16) / 2) as u8;
+                                    raw[i].wrapping_add(avg)
+                                }
+                                4 => {
+                                    // Paeth
+                                    let p = left as i32 + up as i32 - up_left as i32;
+                                    let pa = (p - left as i32).abs();
+                                    let pb = (p - up as i32).abs();
+                                    let pc = (p - up_left as i32).abs();
+                                    let pr = if pa <= pb && pa <= pc {
+                                        left
+                                    } else if pb <= pc {
+                                        up
+                                    } else {
+                                        up_left
+                                    };
+                                    raw[i].wrapping_add(pr)
+                                }
+                                _ => raw[i],
+                            };
+                            curr_row[i] = val;
+                        }
+                        unpredicted.extend_from_slice(&curr_row);
+                        prev_row = curr_row;
+                    }
+                    decoded = unpredicted;
+                }
+            } else if predictor == 2 {
+                // TIFF Predictor 2 (Horizontal Differencing)
+                let bytes_per_pixel = (colors * bpc).div_ceil(8);
+                let bpp = bytes_per_pixel.max(1);
+                let row_bytes = (columns * colors * bpc).div_ceil(8);
+                for chunk in decoded.chunks_exact_mut(row_bytes) {
+                    for i in bpp..row_bytes {
+                        chunk[i] = chunk[i].wrapping_add(chunk[i - bpp]);
+                    }
+                }
+            }
+        }
 
         // Read /W [w1 w2 w3] field widths
         let w_arr = match dict.get("W") {

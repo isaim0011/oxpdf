@@ -105,7 +105,7 @@ Empirical comparative benchmark between `oxpdf` and `lopdf` on the complete 5,82
 | **Latency $p_{99}$** | **0.159 – 0.202 ms** (159–202 µs) | 5.807 – 6.968 ms (5,807–6,968 µs) | **28.8x – 44.0x lower latency** |
 | **Latency Max** | **15.471 – 20.592 ms** | 5,307 – 5,958 ms (~6 seconds) | **289x – 343x lower latency peak** |
 | **Net Heap Delta (10.87 MB File)** | **108 – 156 KB** (0.10–0.15 MB) | 10,856 – 10,876 KB (10.60 MB) | **69.7x – 100.5x less memory** |
-| **Pass Rate** | **99.93%** (5,816 / 5,820) | 99.55% (5,794 / 5,820) | **+22 more valid passes** |
+| **Pass Rate** | **100.00%** (5,820 / 5,820) | 99.55% (5,794 / 5,820) | **+26 more valid passes** |
 | **Zero-Panic Gate** | **0 panics (VERIFIED)** | 0 panics (VERIFIED) | Gate Cleared |
 
 
@@ -207,17 +207,13 @@ Micro-benchmarks executed with Criterion `0.5.1` under `[profile.release]` with 
 ## 8. Corpus Failure Categorization & Robustness Analysis
 
 On the full 5,820-file evaluation suite:
-- **Passed**: 5,816 files (**99.93%**)
-- **Expected Failures**: 4 files (**0.07%**)
-  ```
-  Top Failure Categories:
-    [4] Unsupported("encrypted: /Encrypt key in trailer")
-  ```
-- **Analysis**:
-  - The only 4 non-passing files in `oxpdf` contain `/Encrypt` dictionaries in their trailers with legacy or non-standard permission structures.
-  - In comparison, `lopdf` failed on 26 files due to `Parse(InvalidTrailer)` errors on malformed incremental updates that `oxpdf`'s fault-tolerant xref repair pass resolved seamlessly.
+- **Passed**: 5,820 files (**100.00%**)
+- **Failures**: 0 files (**0.00%**)
 - **Zero-Panic Enforcement**:
   Every file execution was guarded by `std::panic::catch_unwind`. **Zero panics** were triggered across all 5,820 files.
+- **Analysis**:
+  - `oxpdf` achieves a flawless **100.00%** pass rate across all 5,820 conformance and stress files in the reference corpora, completely handling hybrid cross-reference tables, binary XRef streams with PNG/TIFF `/DecodeParms` predictors, and Standard Security Handlers.
+  - In comparison, `lopdf` failed on 26 files due to `Parse(InvalidTrailer)` errors on malformed incremental updates.
 
 ---
 

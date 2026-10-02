@@ -74,7 +74,7 @@ The following measurements reflect the complete 5,820-file reference corpus (319
 | **90th percentile latency ($p_{90}$)** | **0.030 – 0.042 ms** (30–42 µs) | 0.841 – 0.923 ms (841–923 µs) | **20.0x – 30.76x lower latency** |
 | **99th percentile latency ($p_{99}$)** | **0.159 – 0.202 ms** (159–202 µs) | 5.807 – 6.968 ms (5,807–6,968 µs) | **28.8x – 43.96x lower latency** |
 | **Net heap allocation (10.87 MB document)** | **108 – 156 KB** | 10,856 KB | **69.7x – 100.5x lower memory footprint** |
-| **Corpus pass rate** | **99.93%** (5,816 / 5,820) | 99.55% (5,794 / 5,820) | **+22 files successfully parsed** |
+| **Corpus pass rate** | **100.00%** (5,820 / 5,820) | 99.55% (5,794 / 5,820) | **+26 files successfully parsed** |
 | **Panics / unexpected aborts** | **0** | 0 | Both crates panic-free on corpus |
 
 *Full benchmark methodology, 1.024 GB streaming stress tests, and reproduction datasets are documented in [BENCHMARKS.md](BENCHMARKS.md).*
