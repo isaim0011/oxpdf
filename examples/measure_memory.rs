@@ -72,7 +72,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(Some(obj)) = doc.get_object(id) {
             match obj {
                 oxpdf::Object::Stream { dict, data } => {
-                    println!("  Object {}: Stream (dict keys: {:?}, payload: {} bytes)", id, dict.keys().collect::<Vec<_>>(), data.len());
+                    println!(
+                        "  Object {}: Stream (dict keys: {:?}, payload: {} bytes)",
+                        id,
+                        dict.keys().collect::<Vec<_>>(),
+                        data.len()
+                    );
                 }
                 other => {
                     println!("  Object {}: {:?}", id, other);
@@ -84,7 +89,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let peak_rss = get_peak_rss_kb();
     println!("Baseline RSS: {:.2} MB", baseline_rss as f64 / 1024.0);
     println!("Peak RSS: {:.2} MB", peak_rss as f64 / 1024.0);
-    println!("Net heap delta: {:.2} KB", (peak_rss.saturating_sub(baseline_rss)) as f64);
+    println!(
+        "Net heap delta: {:.2} KB",
+        (peak_rss.saturating_sub(baseline_rss)) as f64
+    );
 
     Ok(())
 }
