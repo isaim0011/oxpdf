@@ -179,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "oxpdf"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "aes",
  "cbc",
@@ -195,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "oxpdf-cli"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "oxpdf",
 ]
